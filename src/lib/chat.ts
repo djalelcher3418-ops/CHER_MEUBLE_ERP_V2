@@ -1,3 +1,4 @@
+import { pushActive } from './push'
 import { supabase } from './supabase'
 
 export interface ChatSummary {
@@ -67,6 +68,7 @@ export async function signedUrls(paths: string[]): Promise<Map<string, string>> 
 
 /** تنبيه على الهاتف عندما يكون التطبيق في الخلفية (بعد موافقة المستخدم) */
 export async function notify(title: string, body: string) {
+  if (pushActive()) return // الخادم يرسل التنبيه بنفسه
   if (!('Notification' in window) || Notification.permission !== 'granted' || document.visibilityState === 'visible') return
   try {
     const reg = await navigator.serviceWorker?.getRegistration()

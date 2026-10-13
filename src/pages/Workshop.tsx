@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { sendPush } from '../lib/push'
 import { arabicError, num, supabase, todayISO } from '../lib/supabase'
 import { ORDER_STATUS_LABELS, type OrderPublic, type OrderStatus } from '../lib/types'
 
@@ -46,6 +47,7 @@ export default function Workshop() {
     const { error } = await supabase.rpc('workshop_set_status', { p_order: job.id, p_status: status })
     setBusy(null)
     if (error) return setError(arabicError(error))
+    sendPush({ order_id: job.id })
     setError('')
     load()
   }

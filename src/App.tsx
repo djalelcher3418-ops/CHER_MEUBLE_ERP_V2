@@ -1,8 +1,9 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import Icon, { type IconName } from './components/Icon'
 import Modal from './components/Modal'
 import { useAuth } from './lib/auth'
+import { enablePush, forgetPush } from './lib/push'
 import { configMissing } from './lib/supabase'
 import { useTableLabels } from './lib/useTableLabels'
 import { useUnread } from './lib/useUnread'
@@ -60,6 +61,18 @@ export default function App() {
   const unread = useUnread(session && profile?.active ? session.user.id : undefined)
   useTableLabels(main)
 
+  // إن سبق السماح بالتنبيهات على هذا الهاتف، نجدّد تسجيله بصمت عند الدخول
+  const myId = session && profile?.active ? session.user.id : undefined
+  useEffect(() => {
+    if (myId && 'Notification' in window && Notification.permission === 'granted') enablePush(false)
+  }, [myId])
+
+  async function logout() {
+    if (!confirm('تسجيل الخروج؟')) return
+    await forgetPush()
+    await signOut()
+  }
+
   if (configMissing)
     return (
       <div className="center-page">
@@ -106,7 +119,7 @@ export default function App() {
           <strong>CHER MEUBLE</strong>
           <span>{profile.full_name} · {isAdmin ? 'المدير' : 'عامل'}</span>
         </div>
-        <button className="icon-btn" onClick={() => confirm('تسجيل الخروج؟') && signOut()} aria-label="خروج"><Icon name="logout" /></button>
+        <button className="icon-btn" onClick={logout} aria-label="خروج"><Icon name="logout" /></button>
       </header>
 
       <main className="content" ref={setMain}>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useAuth } from '../lib/auth'
+import { sendPush } from '../lib/push'
 import { signedUrls, uploadChatImage, type ChatRead, type ChatSummary, type Message } from '../lib/chat'
 import { MONTHS } from '../lib/payroll'
 import { arabicError, supabase, todayISO } from '../lib/supabase'
@@ -107,6 +108,7 @@ export default function Chat() {
   async function post(row: { body?: string; image_path?: string }) {
     const { data, error } = await supabase.from('messages').insert({ chat_id: chatId, ...row }).select('*').single()
     if (error) throw error
+    sendPush({ message_id: (data as Message).id })
     stick.current = true
     setMsgs((list) => (list.some((x) => x.id === (data as Message).id) ? list : [...list, data as Message]))
   }

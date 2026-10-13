@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import type { ChatSummary } from '../lib/chat'
+import { enablePush, pushActive, pushSupported, type PushResult } from '../lib/push'
 import { arabicError, supabase, todayISO } from '../lib/supabase'
 
 function when(ts: string | null) {
@@ -16,7 +17,9 @@ function when(ts: string | null) {
 /** قائمة الدردشات: «كل الفريق» ثم الدردشات الخاصة */
 export default function Messages() {
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
-  const [perm, setPerm] = useState(() => ('Notification' in window ? Notification.permission : 'denied'))
+  const [pushOn, setPushOn] = useState(pushActive)
+  const [result, setResult] = useState<PushResult | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -36,18 +39,29 @@ export default function Messages() {
   }, [])
 
   async function enableNotifications() {
-    const p = await Notification.requestPermission()
-    setPerm(p)
+    setBusy(true)
+    const r = await enablePush(true)
+    setBusy(false)
+    setResult(r)
+    setPushOn(r === 'ok')
+  }
+
+  const RESULT: Record<PushResult, string> = {
+    ok: 'تم. ستصلك التنبيهات على هذا الهاتف حتى والتطبيق مغلق.',
+    denied: 'التنبيهات ممنوعة في إعدادات المتصفح. افتح إعدادات الموقع واسمح بالإشعارات ثم أعد المحاولة.',
+    unsupported: 'هذا المتصفح لا يدعم التنبيهات. على الآيفون: أضف التطبيق إلى الشاشة الرئيسية أولًا ثم افتحه منها.',
+    server: 'التنبيهات تعمل والتطبيق مفتوح فقط، لأن دالة send-push غير منشورة بعد في Supabase.',
   }
 
   return (
     <div>
       <div className="page-head"><h2>الرسائل</h2></div>
       {error && <p className="error">{error}</p>}
-      {perm === 'default' && (
+      {result && <p className={result === 'ok' ? 'success' : 'error'}>{RESULT[result]}</p>}
+      {!pushOn && pushSupported() && result !== 'ok' && (
         <div className="card">
-          <p style={{ marginTop: 0 }}>فعّل التنبيهات ليصلك إشعار بالرسائل الجديدة على هذا الهاتف.</p>
-          <button className="secondary" onClick={enableNotifications}><Icon name="bell" /> تفعيل التنبيهات</button>
+          <p style={{ marginTop: 0 }}>فعّل التنبيهات لتصلك الرسائل الجديدة على هذا الهاتف حتى والتطبيق مغلق.</p>
+          <button className="secondary" onClick={enableNotifications} disabled={busy}><Icon name="bell" /> {busy ? 'جارٍ التفعيل…' : 'تفعيل التنبيهات'}</button>
         </div>
       )}
       {chats === null ? (
