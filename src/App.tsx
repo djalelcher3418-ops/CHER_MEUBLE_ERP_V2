@@ -1,19 +1,23 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { configMissing } from './lib/supabase'
-import Customers from './pages/Customers'
-import Dashboard from './pages/Dashboard'
-import Employees from './pages/Employees'
-import Expenses from './pages/Expenses'
-import Invoice from './pages/Invoice'
 import Login from './pages/Login'
-import Materials from './pages/Materials'
-import MyPay from './pages/MyPay'
-import Orders from './pages/Orders'
-import Purchases from './pages/Purchases'
-import Reports from './pages/Reports'
-import ScanOut from './pages/ScanOut'
-import Suppliers from './pages/Suppliers'
+
+// كل صفحة تُحمَّل عند فتحها فقط، فيفتح التطبيق أسرع على الهاتف
+const Customers = lazy(() => import('./pages/Customers'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Employees = lazy(() => import('./pages/Employees'))
+const Expenses = lazy(() => import('./pages/Expenses'))
+const Invoice = lazy(() => import('./pages/Invoice'))
+const Materials = lazy(() => import('./pages/Materials'))
+const MyPay = lazy(() => import('./pages/MyPay'))
+const Orders = lazy(() => import('./pages/Orders'))
+const Purchases = lazy(() => import('./pages/Purchases'))
+const Reports = lazy(() => import('./pages/Reports'))
+const ScanOut = lazy(() => import('./pages/ScanOut'))
+const Suppliers = lazy(() => import('./pages/Suppliers'))
+const Workshop = lazy(() => import('./pages/Workshop'))
 
 export default function App() {
   const { session, profile, loading, isAdmin, signOut } = useAuth()
@@ -50,6 +54,7 @@ export default function App() {
         <nav>
           {isAdmin && <NavLink to="/" end>الرئيسية</NavLink>}
           {isAdmin && <NavLink to="/orders">الطلبيات</NavLink>}
+          <NavLink to="/workshop">الورشة</NavLink>
           {isAdmin && <NavLink to="/customers">الزبائن</NavLink>}
           {isAdmin && <NavLink to="/materials">المواد</NavLink>}
           {isAdmin && <NavLink to="/purchases">المشتريات</NavLink>}
@@ -66,6 +71,7 @@ export default function App() {
         </span>
       </header>
       <main className="content">
+        <Suspense fallback={<p className="muted">جارٍ التحميل…</p>}>
         <Routes>
           {isAdmin ? (
             <>
@@ -79,17 +85,20 @@ export default function App() {
               <Route path="/employees" element={<Employees />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/workshop" element={<Workshop />} />
               <Route path="/scan" element={<ScanOut />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
           ) : (
             <>
+              <Route path="/workshop" element={<Workshop />} />
               <Route path="/scan" element={<ScanOut />} />
               <Route path="/pay" element={<MyPay />} />
-              <Route path="*" element={<Navigate to="/scan" replace />} />
+              <Route path="*" element={<Navigate to="/workshop" replace />} />
             </>
           )}
         </Routes>
+        </Suspense>
       </main>
     </div>
   )

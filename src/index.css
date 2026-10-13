@@ -163,3 +163,17 @@ td input, td select { min-width: 90px; padding: 6px 8px; }
 .lg-half { background: linear-gradient(135deg, var(--danger) 50%, #efe6de 50%); }
 .list li.net { font-size: 18px; font-weight: 700; color: var(--brand); }
 tr.muted td { color: var(--muted); }
+
+/* ---------- المرحلة 4: الورشة وواتساب ---------- */
+a.btn { display: inline-block; text-decoration: none; border-radius: 8px; padding: 9px 16px; background: var(--brand); color: #fff; }
+a.btn.wa { background: #1f8f4e; }
+a.btn.wa:hover { background: #18733f; }
+.jobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.job { display: flex; flex-direction: column; gap: 8px; border-inline-start: 4px solid var(--brand-2); margin: 0; }
+.job.late { border-inline-start-color: var(--danger); }
+.job.st-in_production { border-inline-start-color: #c08a2b; }
+.job-head { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.job-head h3 { margin: 0; font-size: 17px; }
+.job ul { margin: 0; padding-inline-start: 18px; }
+.job .notes { background: #faf6f2; border-radius: 8px; padding: 8px; font-size: 14px; white-space: pre-wrap; }
+.job .toolbar { margin: 0; }

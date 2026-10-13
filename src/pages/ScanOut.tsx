@@ -1,5 +1,6 @@
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { arabicError, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
@@ -23,7 +24,8 @@ export default function ScanOut() {
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
   const [orders, setOrders] = useState<OrderPublic[]>([])
-  const [orderId, setOrderId] = useState('')
+  const [params] = useSearchParams()
+  const [orderId, setOrderId] = useState(() => params.get('order') ?? '')
   const [camera, setCamera] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [recent, setRecent] = useState<MyMove[]>([])
@@ -130,6 +132,9 @@ export default function ScanOut() {
   return (
     <div className="scan-page">
       <h2>إخراج مواد إلى الورشة</h2>
+      {orderId && orders.find((o) => String(o.id) === orderId) && (
+        <p className="card">المواد ستُسجَّل للطلبية: <strong>{orderOf(Number(orderId))}</strong></p>
+      )}
 
       {!camera ? (
         <button className="big-btn" onClick={startCamera}>📷 مسح الباركود بالكاميرا</button>

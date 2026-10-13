@@ -15,6 +15,7 @@ import {
   type PayMethod,
   type Unit,
 } from '../lib/types'
+import { orderMessage, waLink } from '../lib/whatsapp'
 import { CustomerPaymentModal } from './Customers'
 
 type Line = { description: string; qty: string; unit_price: string }
@@ -37,6 +38,15 @@ interface Detail {
   payments: CustomerPayment[]
   moves: MoveRow[]
   notes: string | null
+  phone: string | null
+  events: EventRow[]
+}
+
+interface EventRow {
+  id: number
+  status: OrderStatus
+  created_at: string
+  profiles: { full_name: string } | null
 }
 
 const rest = (o: OrderTotal) => Number(o.total) - Number(o.paid)
@@ -67,7 +77,7 @@ export default function Orders() {
   }
 
   async function openDetail(id: number) {
-    const [o, i, p, m, raw] = await Promise.all([
+    const [o, i, p, m, raw, ev] = await Promise.all([
       supabase.from('order_totals').select('*').eq('id', id).single(),
       supabase.from('order_items').select('*').eq('order_id', id).order('id'),
       supabase.from('customer_payments').select('*').eq('order_id', id).order('paid_on'),
@@ -77,7 +87,8 @@ export default function Orders() {
         .eq('order_id', id)
         .eq('type', 'out')
         .order('created_at'),
-      supabase.from('orders').select('notes').eq('id', id).single(),
+      supabase.from('orders').select('notes, customers(phone)').eq('id', id).single(),
+      supabase.from('order_events').select('id, status, created_at, profiles(full_name)').eq('order_id', id).order('created_at'),
     ])
     if (o.error) return setError(arabicError(o.error))
     setDetail({
@@ -85,7 +96,9 @@ export default function Orders() {
       items: (i.data as OrderItem[]) ?? [],
       payments: (p.data as CustomerPayment[]) ?? [],
       moves: (m.data as unknown as MoveRow[]) ?? [],
-      notes: (raw.data as { notes: string | null } | null)?.notes ?? null,
+      notes: (raw.data as unknown as { notes: string | null } | null)?.notes ?? null,
+      phone: (raw.data as unknown as { customers: { phone: string | null } | null } | null)?.customers?.phone ?? null,
+      events: (ev.data as unknown as EventRow[]) ?? [],
     })
   }
 
@@ -232,6 +245,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }:
   const subtotal = d.items.reduce((a, i) => a + Number(i.qty) * Number(i.unit_price), 0)
   const profit = Number(o.total) - Number(o.material_cost)
   const canDelete = !d.payments.length && !d.moves.length
+  const wa = waLink(d.phone, orderMessage(o, rest(o)))
 
   return (
     <div className="form">
@@ -297,10 +311,25 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }:
         {!d.moves.length && <li className="muted">لم تخرج أي مادة بعد. اختر هذه الطلبية في صفحة «إخراج مواد».</li>}
       </ul>
 
+      {d.events.length > 0 && (
+        <>
+          <h4>سجل الحالات</h4>
+          <ul className="list">
+            {d.events.map((e) => (
+              <li key={e.id}>
+                <span>{ORDER_STATUS_LABELS[e.status]}</span>
+                <span className="muted">{e.profiles?.full_name ?? ''} · {new Date(e.created_at).toLocaleString('fr-DZ')}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <div className="toolbar">
         <button onClick={onPay}>+ دفعة</button>
         <button className="secondary" onClick={onInvoice}>الفاتورة</button>
         <button className="secondary" onClick={onEdit}>تعديل</button>
+        {wa && <a className="btn wa" href={wa} target="_blank" rel="noopener">واتساب للزبون</a>}
         {canDelete && <button className="danger" onClick={onDelete}>حذف</button>}
       </div>
       {!canDelete && <p className="muted">لا يمكن حذف طلبية عليها دفعات أو مواد. غيّر حالتها إلى «ملغاة» بدل ذلك.</p>}
