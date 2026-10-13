@@ -1,6 +1,6 @@
 # CHER MEUBLE ERP
 
-نظام تسيير ورشة CHER MEUBLE — TypeScript + React + Vite + Supabase، يُنشر على Netlify.
+نظام تسيير ورشة CHER MEUBLE — TypeScript + React + Vite + Supabase، يُنشر على Cloudflare Pages.
 
 ## المرحلة 1
 - تسجيل الدخول (مدير / عامل)
@@ -20,10 +20,12 @@ copy .env.example .env      (ثم ضع المفتاح العام)
 npm run dev
 ```
 
-## النشر على Netlify
+## النشر على Cloudflare Pages
+- الرابط: https://cher-meuble-erp-v2.pages.dev
+- يُنشر تلقائيًا عند كل دفع (push) إلى الفرع `main`
 - Build command: `npm run build`
-- Publish directory: `dist`
-- Environment variables: `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY`
+- Build output directory: `dist`
+- Environment variables: `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY` و `NODE_VERSION=22`
 
 ## أدوات مستقلة في نفس المستودع
 
