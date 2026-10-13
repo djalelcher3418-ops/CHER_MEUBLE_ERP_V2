@@ -17,7 +17,7 @@ export default function App() {
         <div className="card narrow">
           <h2>الإعداد ناقص</h2>
           <p>
-            أضف المتغيّرين <code>VITE_SUPABASE_URL</code> و <code>VITE_SUPABASE_ANON_KEY</code> في Netlify
+            أضف المتغيّرين <code>VITE_SUPABASE_URL</code> و <code>VITE_SUPABASE_ANON_KEY</code> في Cloudflare Pages
             (أو في ملف <code>.env</code>).
           </p>
         </div>
