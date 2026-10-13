@@ -3,11 +3,15 @@ import { useAuth } from './lib/auth'
 import { configMissing } from './lib/supabase'
 import Customers from './pages/Customers'
 import Dashboard from './pages/Dashboard'
+import Employees from './pages/Employees'
+import Expenses from './pages/Expenses'
 import Invoice from './pages/Invoice'
 import Login from './pages/Login'
 import Materials from './pages/Materials'
+import MyPay from './pages/MyPay'
 import Orders from './pages/Orders'
 import Purchases from './pages/Purchases'
+import Reports from './pages/Reports'
 import ScanOut from './pages/ScanOut'
 import Suppliers from './pages/Suppliers'
 
@@ -50,7 +54,11 @@ export default function App() {
           {isAdmin && <NavLink to="/materials">المواد</NavLink>}
           {isAdmin && <NavLink to="/purchases">المشتريات</NavLink>}
           {isAdmin && <NavLink to="/suppliers">الموردون</NavLink>}
+          {isAdmin && <NavLink to="/employees">العمّال</NavLink>}
+          {isAdmin && <NavLink to="/expenses">المصاريف</NavLink>}
+          {isAdmin && <NavLink to="/reports">التقرير</NavLink>}
           <NavLink to="/scan">إخراج مواد</NavLink>
+          {!isAdmin && <NavLink to="/pay">راتبي</NavLink>}
         </nav>
         <span className="user">
           {profile.full_name}
@@ -68,12 +76,16 @@ export default function App() {
               <Route path="/materials" element={<Materials />} />
               <Route path="/purchases" element={<Purchases />} />
               <Route path="/suppliers" element={<Suppliers />} />
+              <Route path="/employees" element={<Employees />} />
+              <Route path="/expenses" element={<Expenses />} />
+              <Route path="/reports" element={<Reports />} />
               <Route path="/scan" element={<ScanOut />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
           ) : (
             <>
               <Route path="/scan" element={<ScanOut />} />
+              <Route path="/pay" element={<MyPay />} />
               <Route path="*" element={<Navigate to="/scan" replace />} />
             </>
           )}

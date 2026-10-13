@@ -185,3 +185,60 @@ export interface CustomerPayment {
   method: PayMethod
   notes: string | null
 }
+
+// ---------- المرحلة 3: العمّال والرواتب والمصاريف ----------
+
+export interface Employee {
+  id: number
+  full_name: string
+  phone: string | null
+  daily_wage: number
+  profile_id: string | null
+  hired_on: string | null
+  notes: string | null
+  active: boolean
+}
+
+export interface Absence {
+  id: number
+  employee_id: number
+  day: string
+  half_day: boolean
+  note: string | null
+}
+
+export interface Advance {
+  id: number
+  employee_id: number
+  amount: number
+  given_on: string
+  notes: string | null
+}
+
+export interface PayrollPayment {
+  id: number
+  employee_id: number
+  period_start: string
+  period_end: string
+  days_worked: number
+  daily_wage: number
+  gross: number
+  advances: number
+  amount: number
+  paid_on: string
+  notes: string | null
+}
+
+export interface ExpenseCategory {
+  id: number
+  name: string
+}
+
+export interface Expense {
+  id: number
+  category_id: number | null
+  amount: number
+  spent_on: string
+  description: string | null
+  method: PayMethod
+}
