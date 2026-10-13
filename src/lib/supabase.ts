@@ -21,7 +21,15 @@ export function arabicError(e: unknown): string {
   if (msg.includes('Invalid login credentials')) return 'البريد أو كلمة المرور غير صحيحة'
   if (msg.includes('duplicate key') && msg.includes('barcode')) return 'هذا الباركود مستعمل لمادة أخرى'
   if (msg.includes('duplicate key')) return 'هذه القيمة موجودة من قبل'
+  if (msg.includes('foreign key')) return 'لا يمكن الحذف لأنه مرتبط بسجلات أخرى'
   if (msg.includes('row-level security')) return 'ليست لديك صلاحية لهذه العملية'
   if (msg.includes('Failed to fetch')) return 'لا يوجد اتصال بالإنترنت'
   return msg
+}
+
+/** تاريخ اليوم بالتوقيت المحلي بصيغة YYYY-MM-DD */
+export function todayISO(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }

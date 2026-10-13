@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { dzd, num, supabase } from '../lib/supabase'
-import { UNIT_LABELS, type MaterialPublic, type SupplierBalance } from '../lib/types'
+import { dzd, num, supabase, todayISO } from '../lib/supabase'
+import {
+  ORDER_STATUS_LABELS,
+  UNIT_LABELS,
+  type CustomerBalance,
+  type MaterialPublic,
+  type OrderTotal,
+  type SupplierBalance,
+} from '../lib/types'
 
 interface OutRow {
   id: number
@@ -19,6 +26,9 @@ export default function Dashboard() {
   const [debts, setDebts] = useState<SupplierBalance[]>([])
   const [outs, setOuts] = useState<OutRow[]>([])
   const [monthOut, setMonthOut] = useState(0)
+  const [receivable, setReceivable] = useState(0)
+  const [active, setActive] = useState<OrderTotal[]>([])
+  const today = todayISO()
 
   useEffect(() => {
     const monthStart = new Date()
@@ -35,7 +45,15 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(10),
       supabase.from('stock_movements').select('qty, unit_cost').eq('type', 'out').gte('created_at', monthStart.toISOString()),
-    ]).then(([v, l, d, o, mo]) => {
+      supabase.from('customer_balances').select('balance').gt('balance', 0),
+      supabase
+        .from('order_totals')
+        .select('*')
+        .in('status', ['new', 'in_production', 'ready'])
+        .order('due_date', { ascending: true, nullsFirst: false }),
+    ]).then(([v, l, d, o, mo, cb, ac]) => {
+      setReceivable(((cb.data as Pick<CustomerBalance, 'balance'>[]) ?? []).reduce((a, r) => a + Number(r.balance), 0))
+      setActive((ac.data as OrderTotal[]) ?? [])
       setStockValue(((v.data as { value: number }[]) ?? []).reduce((a, r) => a + Number(r.value), 0))
       setLow((l.data as MaterialPublic[]) ?? [])
       setDebts((d.data as SupplierBalance[]) ?? [])
@@ -50,11 +68,31 @@ export default function Dashboard() {
     <div>
       <h2>الرئيسية</h2>
       <div className="stats">
+        <div className="stat"><span>طلبيات جارية</span><strong>{active.length}</strong></div>
+        <div className="stat"><span>لك عند الزبائن</span><strong>{dzd(receivable)}</strong></div>
         <div className="stat"><span>قيمة المخزون</span><strong>{dzd(stockValue)}</strong></div>
         <div className="stat"><span>ديون الموردين</span><strong className={totalDebt > 0 ? 'neg' : ''}>{dzd(totalDebt)}</strong></div>
         <div className="stat"><span>مواد خرجت للورشة هذا الشهر</span><strong>{dzd(monthOut)}</strong></div>
         <div className="stat"><span>مواد ناقصة</span><strong className={low.length ? 'neg' : ''}>{low.length}</strong></div>
       </div>
+
+      <section className="card">
+        <h3>مواعيد التسليم <Link to="/orders" className="small">كل الطلبيات</Link></h3>
+        <ul className="list">
+          {active.slice(0, 8).map((o) => {
+            const late = !!o.due_date && o.due_date < today
+            return (
+              <li key={o.id}>
+                <Link to={`/orders?open=${o.id}`}>{o.id} — {o.title} — {o.customer_name}</Link>
+                <span className={late ? 'neg' : 'muted'}>
+                  {ORDER_STATUS_LABELS[o.status]} · {o.due_date ?? 'بدون موعد'}{late ? ' (متأخرة)' : ''}
+                </span>
+              </li>
+            )
+          })}
+          {!active.length && <li className="muted">لا طلبيات جارية</li>}
+        </ul>
+      </section>
 
       <div className="two-col">
         <section className="card">

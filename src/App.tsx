@@ -1,9 +1,12 @@
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { configMissing } from './lib/supabase'
+import Customers from './pages/Customers'
 import Dashboard from './pages/Dashboard'
+import Invoice from './pages/Invoice'
 import Login from './pages/Login'
 import Materials from './pages/Materials'
+import Orders from './pages/Orders'
 import Purchases from './pages/Purchases'
 import ScanOut from './pages/ScanOut'
 import Suppliers from './pages/Suppliers'
@@ -42,6 +45,8 @@ export default function App() {
         <strong className="brand">CHER MEUBLE</strong>
         <nav>
           {isAdmin && <NavLink to="/" end>الرئيسية</NavLink>}
+          {isAdmin && <NavLink to="/orders">الطلبيات</NavLink>}
+          {isAdmin && <NavLink to="/customers">الزبائن</NavLink>}
           {isAdmin && <NavLink to="/materials">المواد</NavLink>}
           {isAdmin && <NavLink to="/purchases">المشتريات</NavLink>}
           {isAdmin && <NavLink to="/suppliers">الموردون</NavLink>}
@@ -57,6 +62,9 @@ export default function App() {
           {isAdmin ? (
             <>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/invoice/:id" element={<Invoice />} />
               <Route path="/materials" element={<Materials />} />
               <Route path="/purchases" element={<Purchases />} />
               <Route path="/suppliers" element={<Suppliers />} />

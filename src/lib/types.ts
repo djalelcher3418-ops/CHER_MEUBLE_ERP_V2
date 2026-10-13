@@ -102,3 +102,86 @@ export const PAY_LABELS: Record<PayMethod, string> = {
   cheque: 'صك',
   transfer: 'تحويل',
 }
+
+// ---------- المرحلة 2: الزبائن والطلبيات ----------
+
+export type OrderStatus = 'new' | 'in_production' | 'ready' | 'delivered' | 'cancelled'
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  new: 'جديدة',
+  in_production: 'في الورشة',
+  ready: 'جاهزة',
+  delivered: 'سُلّمت',
+  cancelled: 'ملغاة',
+}
+
+export interface Customer {
+  id: number
+  name: string
+  phone: string | null
+  address: string | null
+  notes: string | null
+  opening_balance: number
+  active: boolean
+}
+
+export interface CustomerBalance {
+  id: number
+  name: string
+  phone: string | null
+  balance: number
+}
+
+export interface Order {
+  id: number
+  customer_id: number
+  title: string
+  order_date: string
+  due_date: string | null
+  status: OrderStatus
+  discount: number
+  notes: string | null
+  delivered_on: string | null
+}
+
+export interface OrderTotal {
+  id: number
+  customer_id: number
+  customer_name: string
+  title: string
+  order_date: string
+  due_date: string | null
+  status: OrderStatus
+  discount: number
+  delivered_on: string | null
+  total: number
+  paid: number
+  material_cost: number
+}
+
+export interface OrderItem {
+  id: number
+  order_id: number
+  description: string
+  qty: number
+  unit_price: number
+}
+
+/** ما يراه العامل: الطلبيات الجارية بدون مبالغ */
+export interface OrderPublic {
+  id: number
+  title: string
+  customer_name: string
+  due_date: string | null
+  status: OrderStatus
+}
+
+export interface CustomerPayment {
+  id: number
+  customer_id: number
+  order_id: number | null
+  amount: number
+  paid_on: string
+  method: PayMethod
+  notes: string | null
+}

@@ -2,7 +2,7 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useAuth } from '../lib/auth'
 import { arabicError, num, supabase } from '../lib/supabase'
-import { UNIT_LABELS, type MaterialPublic } from '../lib/types'
+import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
 
 interface MyMove {
   id: number
@@ -10,6 +10,7 @@ interface MyMove {
   note: string | null
   created_at: string
   material_id: number
+  order_id: number | null
 }
 
 const READER_ID = 'barcode-reader'
@@ -21,23 +22,27 @@ export default function ScanOut() {
   const [found, setFound] = useState<MaterialPublic | null>(null)
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
+  const [orders, setOrders] = useState<OrderPublic[]>([])
+  const [orderId, setOrderId] = useState('')
   const [camera, setCamera] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [recent, setRecent] = useState<MyMove[]>([])
   const scanner = useRef<Html5Qrcode | null>(null)
 
   async function load() {
-    const [m, r] = await Promise.all([
+    const [m, r, o] = await Promise.all([
       supabase.from('materials_public').select('*').order('name'),
       supabase
         .from('stock_movements')
-        .select('id, qty, note, created_at, material_id')
+        .select('id, qty, note, created_at, material_id, order_id')
         .eq('type', 'out')
         .eq('created_by', session!.user.id)
         .order('created_at', { ascending: false })
         .limit(15),
+      supabase.from('orders_public').select('*').order('due_date', { ascending: true, nullsFirst: false }),
     ])
     setMaterials((m.data as MaterialPublic[]) ?? [])
+    setOrders((o.data as OrderPublic[]) ?? [])
     setRecent((r.data as MyMove[]) ?? [])
   }
   useEffect(() => {
@@ -107,6 +112,7 @@ export default function ScanOut() {
       type: 'out',
       qty: q,
       note: note.trim() || null,
+      order_id: orderId ? Number(orderId) : null,
       created_by: session!.user.id,
     })
     if (error) return setMsg({ ok: false, text: arabicError(error) })
@@ -119,6 +125,7 @@ export default function ScanOut() {
   }
 
   const nameOf = (id: number) => materials.find((m) => m.id === id)?.name ?? `#${id}`
+  const orderOf = (id: number | null) => (id ? orders.find((o) => o.id === id)?.title ?? `طلبية ${id}` : '')
 
   return (
     <div className="scan-page">
@@ -149,7 +156,15 @@ export default function ScanOut() {
           <label>الكمية المُخرَجة ({UNIT_LABELS[found.unit]})
             <input type="number" inputMode="decimal" step="any" min="0" value={qty} onChange={(e) => setQty(e.target.value)} required autoFocus />
           </label>
-          <label>لأيّ طلبية / ملاحظة
+          <label>لأيّ طلبية
+            <select value={orderId} onChange={(e) => setOrderId(e.target.value)}>
+              <option value="">— بدون طلبية (استعمال عام) —</option>
+              {orders.map((o) => (
+                <option key={o.id} value={o.id}>{o.id} — {o.title} — {o.customer_name}</option>
+              ))}
+            </select>
+          </label>
+          <label>ملاحظة
             <input value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
           <button type="submit" className="big-btn">تأكيد الإخراج</button>
@@ -160,7 +175,7 @@ export default function ScanOut() {
       <ul className="list">
         {recent.map((r) => (
           <li key={r.id}>
-            <span>{nameOf(r.material_id)} — {num(r.qty)}</span>
+            <span>{nameOf(r.material_id)} — {num(r.qty)}{r.order_id ? ` — ${orderOf(r.order_id)}` : ''}</span>
             <span className="muted">{new Date(r.created_at).toLocaleString('fr-DZ')}{r.note ? ` — ${r.note}` : ''}</span>
           </li>
         ))}
