@@ -7,7 +7,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'sw-notify.js'],
+      workbox: { importScripts: ['sw-notify.js'] },
       manifest: {
         name: 'CHER MEUBLE',
         short_name: 'CHER MEUBLE',
@@ -15,8 +16,9 @@ export default defineConfig({
         dir: 'rtl',
         start_url: '/',
         display: 'standalone',
-        background_color: '#f6f2ee',
+        background_color: '#f4eee7',
         theme_color: '#7a4a2b',
+        orientation: 'portrait',
         icons: [{ src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
       },
     }),

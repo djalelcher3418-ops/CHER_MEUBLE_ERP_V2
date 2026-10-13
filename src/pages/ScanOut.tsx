@@ -2,7 +2,7 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { arabicError, num, supabase } from '../lib/supabase'
+import { arabicError, dateTime, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
 
 interface MyMove {
@@ -181,7 +181,7 @@ export default function ScanOut() {
         {recent.map((r) => (
           <li key={r.id}>
             <span>{nameOf(r.material_id)} — {num(r.qty)}{r.order_id ? ` — ${orderOf(r.order_id)}` : ''}</span>
-            <span className="muted">{new Date(r.created_at).toLocaleString('fr-DZ')}{r.note ? ` — ${r.note}` : ''}</span>
+            <span className="muted">{dateTime(r.created_at)}{r.note ? ` — ${r.note}` : ''}</span>
           </li>
         ))}
         {!recent.length && <li className="muted">لا شيء بعد</li>}

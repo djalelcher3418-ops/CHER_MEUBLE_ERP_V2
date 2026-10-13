@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { dzd, num, supabase, todayISO } from '../lib/supabase'
+import { dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
   ORDER_STATUS_LABELS,
   UNIT_LABELS,
@@ -122,7 +122,7 @@ export default function Dashboard() {
           {outs.map((o) => (
             <li key={o.id}>
               <span>{o.materials?.name} — {num(o.qty)} {o.note ? `(${o.note})` : ''}</span>
-              <span className="muted">{o.profiles?.full_name ?? ''} · {new Date(o.created_at).toLocaleString('fr-DZ')}</span>
+              <span className="muted">{o.profiles?.full_name ?? ''} · {dateTime(o.created_at)}</span>
             </li>
           ))}
           {!outs.length && <li className="muted">لا حركات بعد</li>}

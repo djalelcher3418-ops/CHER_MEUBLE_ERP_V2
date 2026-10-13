@@ -19,8 +19,9 @@ export default function Login() {
   return (
     <div className="center-page">
       <form className="card narrow" onSubmit={submit}>
+        <div className="login-logo">CM</div>
         <h1 className="brand big">CHER MEUBLE</h1>
-        <p className="muted">تسجيل الدخول</p>
+        <p className="muted center" style={{ margin: 0 }}>نظام تسيير الورشة — سجّل دخولك</p>
         <label>
           البريد الإلكتروني
           <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" />
@@ -30,7 +31,7 @@ export default function Login() {
           <input type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={busy}>{busy ? '…' : 'دخول'}</button>
+        <button type="submit" className="big-btn" disabled={busy}>{busy ? '…' : 'دخول'}</button>
       </form>
     </div>
   )

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import Barcode from '../components/Barcode'
 import Modal from '../components/Modal'
-import { arabicError, dzd, num, supabase } from '../lib/supabase'
+import { arabicError, dateTime, dzd, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type Category, type Material, type StockMovement, type Unit } from '../lib/types'
 
 type Draft = {
@@ -234,7 +234,7 @@ export default function Materials() {
               <tbody>
                 {history.rows.map((r) => (
                   <tr key={r.id}>
-                    <td>{new Date(r.created_at).toLocaleString('fr-DZ')}</td>
+                    <td>{dateTime(r.created_at)}</td>
                     <td>{MOVE_LABELS[r.type]}</td>
                     <td>{num(r.qty)}</td>
                     <td>{r.unit_cost != null ? dzd(r.unit_cost) : '—'}</td>

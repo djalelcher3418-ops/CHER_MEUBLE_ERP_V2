@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Modal from '../components/Modal'
-import { arabicError, dzd, num, supabase, todayISO } from '../lib/supabase'
+import { arabicError, dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
   ORDER_STATUS_LABELS,
   PAY_LABELS,
@@ -250,9 +250,11 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }:
   return (
     <div className="form">
       <h3>{o.title}</h3>
-      <div className="grid3">
-        <div>تاريخ الطلب: <strong>{o.order_date}</strong></div>
-        <div className={isLate(o, today) ? 'neg' : ''}>موعد التسليم: <strong>{o.due_date ?? '—'}</strong>{isLate(o, today) ? ' (متأخرة)' : ''}</div>
+      <ul className="list">
+        <li><span className="muted">تاريخ الطلب</span><strong>{o.order_date}</strong></li>
+        <li><span className="muted">موعد التسليم</span><strong className={isLate(o, today) ? 'neg' : ''}>{o.due_date ?? '—'}{isLate(o, today) ? ' (متأخرة)' : ''}</strong></li>
+      </ul>
+      <div>
         <label>الحالة
           <select value={o.status} onChange={(e) => onStatus(e.target.value as OrderStatus)}>
             {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -318,7 +320,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }:
             {d.events.map((e) => (
               <li key={e.id}>
                 <span>{ORDER_STATUS_LABELS[e.status]}</span>
-                <span className="muted">{e.profiles?.full_name ?? ''} · {new Date(e.created_at).toLocaleString('fr-DZ')}</span>
+                <span className="muted">{e.profiles?.full_name ?? ''} · {dateTime(e.created_at)}</span>
               </li>
             ))}
           </ul>
