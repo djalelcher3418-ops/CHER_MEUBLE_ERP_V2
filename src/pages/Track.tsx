@@ -48,7 +48,8 @@ export default function Track() {
       </div>
     )
 
-  const step = STEPS.indexOf(o.status)
+  // بعد التسليم تكتمل كل الخطوات
+  const step = o.status === 'delivered' ? STEPS.length : STEPS.indexOf(o.status)
   const remaining = Number(o.total) - Number(o.paid)
 
   return (
