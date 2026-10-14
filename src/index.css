@@ -421,3 +421,8 @@ a.btn.secondary-link { background: var(--brand-soft); color: var(--brand); }
 .steps li.done .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
 .steps li.now { color: var(--brand); font-weight: 700; }
 .steps li.now .dot { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+
+/* ---------- المرحلة 11: عروض الأسعار ---------- */
+.status.st-quote { background: #efe4fb; color: #6b3fa0; }
+@media (prefers-color-scheme: dark) { .status.st-quote { background: #2f2240; color: #c9a3e6; } }
+.quote-box { border-color: #b896de; background: color-mix(in srgb, #b896de 10%, var(--surface)); margin: 0; }

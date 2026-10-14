@@ -29,6 +29,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p10', label: 'صور الطلبيات ورابط التتبع', fix: 'شغّل supabase/010_photos_tracking.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 10,
   },
+  {
+    key: 'p11', label: 'عروض الأسعار', fix: 'شغّل supabase/011_quotes.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 11,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */

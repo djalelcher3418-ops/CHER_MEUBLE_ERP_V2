@@ -13,6 +13,7 @@ interface Tracked {
   delivered_on: string | null
   total: number
   paid: number
+  is_quote?: boolean
   items: { description: string; qty: number }[]
 }
 
@@ -50,6 +51,7 @@ export default function Track() {
 
   // بعد التسليم تكتمل كل الخطوات
   const step = o.status === 'delivered' ? STEPS.length : STEPS.indexOf(o.status)
+  const quote = !!o.is_quote && o.status !== 'cancelled'
   const remaining = Number(o.total) - Number(o.paid)
 
   return (
@@ -57,15 +59,17 @@ export default function Track() {
       <header className="track-head">
         <div className="login-logo">CM</div>
         <h1 className="brand">CHER MEUBLE</h1>
-        <p className="muted">متابعة الطلبية رقم {o.id}</p>
+        <p className="muted">{quote ? `عرض السعر رقم ${o.id}` : `متابعة الطلبية رقم ${o.id}`}</p>
       </header>
 
       <section className="card">
         <p style={{ marginTop: 0 }}>مرحبًا {o.customer}،</p>
         <h2 style={{ margin: '0 0 6px' }}>{o.title}</h2>
-        <p className={`status st-${o.status}`} style={{ fontSize: 15 }}>{STEP_TEXT[o.status]}</p>
+        {quote
+          ? <p className="status st-quote" style={{ fontSize: 15 }}>عرض سعر في انتظار موافقتكم</p>
+          : <p className={`status st-${o.status}`} style={{ fontSize: 15 }}>{STEP_TEXT[o.status]}</p>}
 
-        {o.status !== 'cancelled' && (
+        {o.status !== 'cancelled' && !quote && (
           <ol className="steps">
             {STEPS.map((s, i) => (
               <li key={s} className={i < step ? 'done' : i === step ? 'now' : ''}>
@@ -77,7 +81,7 @@ export default function Track() {
         )}
 
         <ul className="list">
-          <li><span className="muted">تاريخ الطلب</span><strong>{o.order_date}</strong></li>
+          <li><span className="muted">{quote ? 'تاريخ العرض' : 'تاريخ الطلب'}</span><strong>{o.order_date}</strong></li>
           {o.delivered_on
             ? <li><span className="muted">تاريخ التسليم</span><strong>{o.delivered_on}</strong></li>
             : o.due_date && <li><span className="muted">التسليم المتوقع</span><strong>{o.due_date}</strong></li>}
@@ -96,8 +100,9 @@ export default function Track() {
       <section className="card">
         <ul className="list">
           <li><span className="muted">المبلغ</span><strong>{dzd(o.total)}</strong></li>
-          <li><span className="muted">المدفوع</span><strong className="pos">{dzd(o.paid)}</strong></li>
-          <li className="net"><span>الباقي</span><strong>{dzd(remaining)}</strong></li>
+          {!quote && <li><span className="muted">المدفوع</span><strong className="pos">{dzd(o.paid)}</strong></li>}
+          {!quote && <li className="net"><span>الباقي</span><strong>{dzd(remaining)}</strong></li>}
+          {quote && <li className="muted">العرض صالح لمدة 15 يومًا. للموافقة اتصلوا بالورشة.</li>}
         </ul>
       </section>
 

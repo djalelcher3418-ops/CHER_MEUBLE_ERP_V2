@@ -54,14 +54,14 @@ interface EventRow {
 }
 
 const rest = (o: OrderTotal) => Number(o.total) - Number(o.paid)
-const isLate = (o: OrderTotal, today: string) => ACTIVE.includes(o.status) && !!o.due_date && o.due_date < today
+const isLate = (o: OrderTotal, today: string) => !o.is_quote && ACTIVE.includes(o.status) && !!o.due_date && o.due_date < today
 
 export default function Orders() {
   const [rows, setRows] = useState<OrderTotal[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [filter, setFilter] = useState<'active' | 'all' | OrderStatus>('active')
+  const [filter, setFilter] = useState<'active' | 'all' | 'quotes' | OrderStatus>('active')
   const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<{ order?: Order; items?: OrderItem[] } | null>(null)
+  const [editing, setEditing] = useState<{ order?: Order; items?: OrderItem[]; quote?: boolean } | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
   const [paying, setPaying] = useState<OrderTotal | null>(null)
   const [error, setError] = useState('')
@@ -125,7 +125,10 @@ export default function Orders() {
     const q = search.trim().toLowerCase()
     return rows.filter(
       (o) =>
-        (filter === 'all' || (filter === 'active' ? ACTIVE.includes(o.status) : o.status === filter)) &&
+        (filter === 'all' ||
+          (filter === 'quotes' ? !!o.is_quote
+            : filter === 'active' ? !o.is_quote && ACTIVE.includes(o.status)
+            : !o.is_quote && o.status === filter)) &&
         (!q || o.title.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || String(o.id) === q),
     )
   }, [rows, filter, search])
@@ -147,6 +150,14 @@ export default function Orders() {
     setEditing({ order: o.data as Order, items: (i.data as OrderItem[]) ?? [] })
   }
 
+  async function convert(o: OrderTotal) {
+    if (!confirm(`الزبون وافق؟ تحويل عرض السعر رقم ${o.id} إلى طلبية (تصل للورشة وتُحسب على الزبون)؟`)) return
+    const { error } = await supabase.rpc('convert_quote', { p_id: o.id })
+    if (error) return setError(arabicError(error))
+    await load()
+    openDetail(o.id)
+  }
+
   async function remove(d: Detail) {
     if (!confirm(`حذف الطلبية رقم ${d.o.id} نهائيًا؟`)) return
     const { error } = await supabase.from('orders').delete().eq('id', d.o.id)
@@ -155,28 +166,34 @@ export default function Orders() {
     load()
   }
 
-  const activeCount = rows.filter((o) => ACTIVE.includes(o.status)).length
+  const activeCount = rows.filter((o) => !o.is_quote && ACTIVE.includes(o.status)).length
   const lateCount = rows.filter((o) => isLate(o, today)).length
+  const quoteCount = rows.filter((o) => o.is_quote && o.status !== 'cancelled').length
 
   return (
     <div>
       <div className="page-head">
         <h2>الطلبيات</h2>
-        <button onClick={() => setEditing({})} disabled={!customers.length} title={customers.length ? '' : 'أضف زبونًا أولًا'}>
-          + طلبية جديدة
-        </button>
+        <div className="toolbar" style={{ margin: 0 }}>
+          <button className="secondary" onClick={() => setEditing({ quote: true })} disabled={!customers.length}>+ عرض سعر</button>
+          <button onClick={() => setEditing({})} disabled={!customers.length} title={customers.length ? '' : 'أضف زبونًا أولًا'}>
+            + طلبية جديدة
+          </button>
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       {!customers.length && <p className="muted">لإضافة طلبية، أضف الزبون أولًا من صفحة <Link to="/customers">الزبائن</Link>.</p>}
       <p className="muted">
         طلبيات جارية: <strong>{activeCount}</strong>
         {lateCount > 0 && <> — متأخرة عن موعد التسليم: <strong className="neg">{lateCount}</strong></>}
+        {quoteCount > 0 && <> — عروض أسعار تنتظر الموافقة: <strong>{quoteCount}</strong></>}
       </p>
 
       <div className="filters">
         <input placeholder="بحث بالرقم، الزبون أو الطلبية" value={search} onChange={(e) => setSearch(e.target.value)} />
         <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
           <option value="active">الجارية</option>
+          <option value="quotes">عروض الأسعار</option>
           <option value="all">الكل</option>
           {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
@@ -192,9 +209,13 @@ export default function Orders() {
                 <td>{o.customer_name}</td>
                 <td>{o.title}</td>
                 <td className={isLate(o, today) ? 'neg' : ''}>{o.due_date ?? '—'}</td>
-                <td><span className={`status st-${o.status}`}>{ORDER_STATUS_LABELS[o.status]}</span></td>
+                <td>
+                  {o.is_quote && o.status !== 'cancelled'
+                    ? <span className="status st-quote">عرض سعر</span>
+                    : <span className={`status st-${o.status}`}>{ORDER_STATUS_LABELS[o.status]}</span>}
+                </td>
                 <td>{dzd(o.total)}</td>
-                <td className={rest(o) > 0 && o.status !== 'cancelled' ? 'neg' : ''}>{dzd(rest(o))}</td>
+                <td className={rest(o) > 0 && o.status !== 'cancelled' && !o.is_quote ? 'neg' : ''}>{o.is_quote ? '—' : dzd(rest(o))}</td>
                 <td className="actions"><button className="link" onClick={() => openDetail(o.id)}>التفاصيل</button></td>
               </tr>
             ))}
@@ -208,6 +229,7 @@ export default function Orders() {
           customers={customers}
           order={editing.order}
           items={editing.items}
+          quote={editing.order ? !!editing.order.is_quote : !!editing.quote}
           onClose={() => setEditing(null)}
           onDone={async (id) => { setEditing(null); await load(); openDetail(id) }}
         />
@@ -225,7 +247,7 @@ export default function Orders() {
       )}
 
       {detail && !paying && (
-        <Modal title={`طلبية رقم ${detail.o.id} — ${detail.o.customer_name}`} onClose={() => setDetail(null)}>
+        <Modal title={`${detail.o.is_quote ? 'عرض سعر' : 'طلبية'} رقم ${detail.o.id} — ${detail.o.customer_name}`} onClose={() => setDetail(null)}>
           <OrderDetail
             d={detail}
             today={today}
@@ -235,6 +257,7 @@ export default function Orders() {
             onInvoice={() => navigate(`/invoice/${detail.o.id}`)}
             onDelete={() => remove(detail)}
             onReload={() => openDetail(detail.o.id)}
+            onConvert={() => convert(detail.o)}
           />
         </Modal>
       )}
@@ -242,7 +265,7 @@ export default function Orders() {
   )
 }
 
-function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, onReload }: {
+function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, onReload, onConvert }: {
   d: Detail
   today: string
   onStatus: (s: OrderStatus) => void
@@ -251,8 +274,10 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
   onInvoice: () => void
   onDelete: () => void
   onReload: () => void
+  onConvert: () => void
 }) {
   const { o } = d
+  const quote = !!o.is_quote && o.status !== 'cancelled'
   const [copied, setCopied] = useState(false)
   const link = d.token ? trackUrl(d.token) : null
   async function copyLink() {
@@ -267,17 +292,29 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
   return (
     <div className="form">
       <h3>{o.title}</h3>
+      {quote && (
+        <div className="card quote-box">
+          <strong>عرض سعر في انتظار موافقة الزبون</strong>
+          <p className="muted" style={{ margin: '4px 0 10px' }}>لا يُحسب على الزبون ولا يصل للورشة حتى تحوّله إلى طلبية.</p>
+          <div className="toolbar" style={{ margin: 0 }}>
+            <button onClick={onConvert}>✓ الزبون وافق: تحويل إلى طلبية</button>
+            <button className="secondary" onClick={() => confirm('الزبون رفض العرض؟ سيُعلَّم كملغى.') && onStatus('cancelled')}>الزبون رفض</button>
+          </div>
+        </div>
+      )}
       <ul className="list">
-        <li><span className="muted">تاريخ الطلب</span><strong>{o.order_date}</strong></li>
+        <li><span className="muted">{quote ? 'تاريخ العرض' : 'تاريخ الطلب'}</span><strong>{o.order_date}</strong></li>
         <li><span className="muted">موعد التسليم</span><strong className={isLate(o, today) ? 'neg' : ''}>{o.due_date ?? '—'}{isLate(o, today) ? ' (متأخرة)' : ''}</strong></li>
       </ul>
-      <div>
-        <label>الحالة
-          <select value={o.status} onChange={(e) => onStatus(e.target.value as OrderStatus)}>
-            {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </label>
-      </div>
+      {!quote && (
+        <div>
+          <label>الحالة
+            <select value={o.status} onChange={(e) => onStatus(e.target.value as OrderStatus)}>
+              {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
       {o.delivered_on && <p className="muted">سُلّمت يوم {o.delivered_on}</p>}
       {d.notes && <p className="muted">ملاحظات: {d.notes}</p>}
 
@@ -301,23 +338,31 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
         <div className="stat"><span>المجموع</span><strong>{dzd(subtotal)}</strong></div>
         {Number(o.discount) > 0 && <div className="stat"><span>التخفيض</span><strong>{dzd(o.discount)}</strong></div>}
         <div className="stat"><span>الصافي</span><strong>{dzd(o.total)}</strong></div>
-        <div className="stat"><span>المدفوع</span><strong className="pos">{dzd(o.paid)}</strong></div>
-        <div className="stat"><span>الباقي</span><strong className={rest(o) > 0 ? 'neg' : ''}>{dzd(rest(o))}</strong></div>
+        {!quote && <div className="stat"><span>المدفوع</span><strong className="pos">{dzd(o.paid)}</strong></div>}
+        {!quote && <div className="stat"><span>الباقي</span><strong className={rest(o) > 0 ? 'neg' : ''}>{dzd(rest(o))}</strong></div>}
       </div>
 
-      <div className="stats">
-        <div className="stat"><span>تكلفة المواد المُخرَجة</span><strong>{dzd(o.material_cost)}</strong></div>
-        <div className="stat"><span>الربح التقريبي</span><strong className={profit < 0 ? 'neg' : 'pos'}>{dzd(profit)}</strong></div>
-      </div>
-      <p className="muted">الربح = الصافي ناقص تكلفة المواد التي أُخرجت لهذه الطلبية. لا يشمل أجور العمال والمصاريف الأخرى.</p>
+      {!quote && (
+        <>
+          <div className="stats">
+            <div className="stat"><span>تكلفة المواد المُخرَجة</span><strong>{dzd(o.material_cost)}</strong></div>
+            <div className="stat"><span>الربح التقريبي</span><strong className={profit < 0 ? 'neg' : 'pos'}>{dzd(profit)}</strong></div>
+          </div>
+          <p className="muted">الربح = الصافي ناقص تكلفة المواد التي أُخرجت لهذه الطلبية. لا يشمل أجور العمال والمصاريف الأخرى.</p>
+        </>
+      )}
 
       <h4>الصور (التصميم، المقاسات، القطعة الجاهزة)</h4>
       <PhotoStrip orderId={o.id} photos={d.photos} canAdd canDelete={() => true} onChanged={onReload} />
 
       {link && (
         <>
-          <h4>رابط التتبع للزبون</h4>
-          <p className="muted" style={{ margin: 0 }}>يرى الزبون بهذا الرابط حالة طلبيته وموعد التسليم والباقي، بدون حساب. يُرسل تلقائيًا مع رسالة واتساب.</p>
+          <h4>{quote ? 'رابط العرض للزبون' : 'رابط التتبع للزبون'}</h4>
+          <p className="muted" style={{ margin: 0 }}>
+            {quote
+              ? 'يرى الزبون بهذا الرابط تفاصيل العرض والمبلغ، بدون حساب. يُرسل تلقائيًا مع رسالة واتساب.'
+              : 'يرى الزبون بهذا الرابط حالة طلبيته وموعد التسليم والباقي، بدون حساب. يُرسل تلقائيًا مع رسالة واتساب.'}
+          </p>
           <div className="toolbar" style={{ marginTop: 8 }}>
             <button type="button" className="secondary" onClick={copyLink}>{copied ? 'تم النسخ ✓' : 'نسخ الرابط'}</button>
             <a className="btn secondary-link" href={link} target="_blank" rel="noopener">فتح صفحة الزبون</a>
@@ -325,6 +370,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
         </>
       )}
 
+      {!quote && <>
       <h4>الدفعات</h4>
       <ul className="list">
         {d.payments.map((p) => (
@@ -357,10 +403,11 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
           </ul>
         </>
       )}
+      </>}
 
       <div className="toolbar">
-        <button onClick={onPay}>+ دفعة</button>
-        <button className="secondary" onClick={onInvoice}>الفاتورة</button>
+        {!quote && <button onClick={onPay}>+ دفعة</button>}
+        <button className="secondary" onClick={onInvoice}>{quote ? 'طباعة عرض السعر' : 'الفاتورة'}</button>
         <button className="secondary" onClick={onEdit}>تعديل</button>
         {wa && <a className="btn wa" href={wa} target="_blank" rel="noopener">واتساب للزبون</a>}
         {canDelete && <button className="danger" onClick={onDelete}>حذف</button>}
@@ -370,10 +417,11 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
   )
 }
 
-function OrderForm({ customers, order, items, onClose, onDone }: {
+function OrderForm({ customers, order, items, quote = false, onClose, onDone }: {
   customers: Customer[]
   order?: Order
   items?: OrderItem[]
+  quote?: boolean
   onClose: () => void
   onDone: (id: number) => void
 }) {
@@ -420,6 +468,7 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
         due_date: dueDate || '',
         notes: notes.trim(),
         discount: Number(discount) || 0,
+        ...(quote && !order ? { is_quote: true } : {}),
       },
       p_items: valid.map((l) => ({ description: l.description.trim(), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
     })
@@ -437,7 +486,10 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
   }
 
   return (
-    <Modal title={order ? `تعديل الطلبية رقم ${order.id}` : 'طلبية جديدة'} onClose={onClose}>
+    <Modal
+      title={order ? `تعديل ${quote ? 'عرض السعر' : 'الطلبية'} رقم ${order.id}` : quote ? 'عرض سعر جديد' : 'طلبية جديدة'}
+      onClose={onClose}
+    >
       <form className="form" onSubmit={submit}>
         <div className="grid3">
           <label>الزبون
@@ -476,7 +528,7 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
         </div>
         {ignored > 0 && <p className="error">{ignored === 1 ? 'سطر واحد ناقص' : `${ignored} أسطر ناقصة`} (بلا بيان أو بلا كمية) ولن يُحفظ ولا يدخل في المجموع.</p>}
 
-        {!order && (
+        {!order && !quote && (
           <div className="grid3">
             <label>العربون المدفوع الآن
               <input type="number" step="any" min="0" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
@@ -493,7 +545,7 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
         <label>ملاحظات (المقاسات، الألوان، القماش…)<input value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
 
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ الطلبية'}</button>
+        <button type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : quote ? 'حفظ عرض السعر' : 'حفظ الطلبية'}</button>
       </form>
     </Modal>
   )

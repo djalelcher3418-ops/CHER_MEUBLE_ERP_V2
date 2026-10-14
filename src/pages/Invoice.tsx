@@ -38,12 +38,13 @@ export default function Invoice() {
   const { o, c, items, payments } = data
   const subtotal = items.reduce((a, r) => a + Number(r.qty) * Number(r.unit_price), 0)
   const remaining = Number(o.total) - Number(o.paid)
+  const quote = !!o.is_quote
 
   return (
     <div>
       <div className="toolbar no-print">
         <button onClick={() => window.print()}>طباعة / حفظ PDF</button>
-        <button className="secondary" onClick={() => navigate(`/orders?open=${o.id}`)}>رجوع للطلبية</button>
+        <button className="secondary" onClick={() => navigate(`/orders?open=${o.id}`)}>{o.is_quote ? 'رجوع لعرض السعر' : 'رجوع للطلبية'}</button>
       </div>
 
       <article className="invoice card">
@@ -53,9 +54,9 @@ export default function Invoice() {
             <p className="muted">ورشة صناعة الأثاث</p>
           </div>
           <div className="invoice-meta">
-            <h2>فاتورة رقم {o.id}</h2>
+            <h2>{quote ? 'عرض سعر' : 'فاتورة'} رقم {o.id}</h2>
             <p>التاريخ: {o.order_date}</p>
-            {o.due_date && <p>موعد التسليم: {o.due_date}</p>}
+            {o.due_date && <p>{quote ? 'مدة الإنجاز حتى' : 'موعد التسليم'}: {o.due_date}</p>}
           </div>
         </header>
 
@@ -86,14 +87,16 @@ export default function Invoice() {
           <div><span>المجموع</span><span>{dzd(subtotal)}</span></div>
           {Number(o.discount) > 0 && <div><span>التخفيض</span><span>− {dzd(o.discount)}</span></div>}
           <div className="grand"><span>الصافي</span><span>{dzd(o.total)}</span></div>
-          {payments.map((p) => (
+          {!quote && payments.map((p) => (
             <div key={p.id}><span>دفعة {p.paid_on} ({PAY_LABELS[p.method]})</span><span>− {dzd(p.amount)}</span></div>
           ))}
-          <div className="grand"><span>الباقي</span><span>{dzd(remaining)}</span></div>
+          {!quote && <div className="grand"><span>الباقي</span><span>{dzd(remaining)}</span></div>}
         </div>
 
+        {quote && <p className="muted">هذا العرض صالح لمدة 15 يومًا من تاريخه. تبدأ الأشغال بعد الموافقة ودفع العربون.</p>}
+
         <footer className="invoice-foot">
-          <div>توقيع الزبون</div>
+          <div>{quote ? 'موافقة الزبون' : 'توقيع الزبون'}</div>
           <div>ختم الورشة</div>
         </footer>
       </article>

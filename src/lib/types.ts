@@ -142,6 +142,8 @@ export interface Order {
   discount: number
   notes: string | null
   delivered_on: string | null
+  /** عرض سعر لم يُحوَّل بعد إلى طلبية (المرحلة 11) */
+  is_quote?: boolean
 }
 
 export interface OrderTotal {
@@ -157,6 +159,8 @@ export interface OrderTotal {
   total: number
   paid: number
   material_cost: number
+  /** عرض سعر لم يُحوَّل بعد إلى طلبية (المرحلة 11) */
+  is_quote?: boolean
 }
 
 export interface OrderItem {

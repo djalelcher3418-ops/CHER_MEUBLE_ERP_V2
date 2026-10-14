@@ -12,12 +12,16 @@ export function waLink(phone: string | null | undefined, text: string): string |
 
 /** نص رسالة للزبون حسب حالة الطلبية */
 export function orderMessage(
-  o: { id: number; title: string; customer_name: string; status: OrderStatus; due_date: string | null },
+  o: { id: number; title: string; customer_name: string; status: OrderStatus; due_date: string | null; is_quote?: boolean; total?: number },
   remaining: number,
   trackLink?: string | null,
 ): string {
   const rest = remaining > 0 ? `\nالباقي للدفع: ${dzd(remaining)}` : ''
   const head = `السلام عليكم ${o.customer_name}،`
+  if (o.is_quote) {
+    const details = trackLink ? `\n\nتفاصيل العرض:\n${trackLink}` : ''
+    return `${head}\nإليكم عرض السعر رقم ${o.id} (${o.title}).\nالمبلغ: ${dzd(o.total ?? 0)}${details}\n\nفي انتظار موافقتكم.\nCHER MEUBLE`
+  }
   const track = trackLink && o.status !== 'cancelled' ? `\n\nتابعوا طلبيتكم من هنا:\n${trackLink}` : ''
   const sign = `${track}\n\nCHER MEUBLE`
   switch (o.status) {

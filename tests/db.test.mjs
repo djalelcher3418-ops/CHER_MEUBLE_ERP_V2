@@ -365,6 +365,51 @@ ok((await q(`select track_order('00000000-0000-0000-0000-000000000000') as t`))[
 let anonPhotos = false; try { await q(`select * from order_photos`) } catch { anonPhotos = true }
 ok(anonPhotos || (await q(`select * from order_photos`)).length === 0, 'a visitor without account sees no photos')
 
+// --- phase 11: quotes
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/011_quotes.sql', 'utf8'))
+console.log('ok   quotes migration ran on existing data')
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 11, 'schema version is 11')
+const balBefore = Number((await q(`select balance from customer_balances where id = 1`))[0].balance)
+const QUOTE = (await q(`select save_order(null, '{"customer_id":1,"title":"مطبخ كامل","order_date":"2026-09-01","is_quote":true}', '[{"description":"خزائن","qty":6,"unit_price":20000}]') as id`))[0].id
+let qt = (await q(`select is_quote, total, status from order_totals where id = ${QUOTE}`))[0]
+ok(qt.is_quote === true && Number(qt.total) === 120000 && qt.status === 'new', 'a quote is saved with its lines')
+ok(Number((await q(`select balance from customer_balances where id = 1`))[0].balance) === balBefore, 'a quote does not count as customer debt')
+await q(`select save_order(${QUOTE}, '{"customer_id":1,"title":"مطبخ كامل مع رخام","order_date":"2026-09-01"}', '[{"description":"خزائن","qty":6,"unit_price":22000}]')`)
+ok((await q(`select is_quote from orders where id = ${QUOTE}`))[0].is_quote === true, 'editing a quote keeps it a quote')
+
+await as(WORKER)
+ok((await q(`select * from orders_public where id = ${QUOTE}`)).length === 0, 'the workshop does not see quotes')
+ok((await q(`select * from order_items_public where order_id = ${QUOTE}`)).length === 0, 'workers do not see quote lines')
+let qMat = false; try { await q(`insert into stock_movements (material_id, type, qty, order_id, created_by) values (1, 'out', 1, ${QUOTE}, '${WORKER}')`) } catch { qMat = true }
+ok(qMat, 'no material can be taken out for a quote')
+let qWs = false; try { await q(`select workshop_set_status(${QUOTE}, 'in_production')`) } catch { qWs = true }
+ok(qWs, 'a worker cannot start a quote')
+let qPh = false; try { await q(`insert into storage.objects (bucket_id, name) values ('orders', '${QUOTE}/x.jpg')`) } catch { qPh = true }
+ok(qPh, 'a worker cannot add photos to a quote')
+
+await as(ADMIN)
+const qToken = (await q(`select track_token from orders where id = ${QUOTE}`))[0].track_token
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+const qtr = (await q(`select track_order('${qToken}') as t`))[0].t
+ok(qtr.is_quote === true && Number(qtr.total) === 132000, 'the customer sees the quote through the link')
+let anonConvert = false; try { await q(`select convert_quote(${QUOTE})`) } catch { anonConvert = true }
+ok(anonConvert, 'a visitor cannot accept a quote')
+
+await as(WORKER)
+await q(`select convert_quote(${QUOTE})`).catch(() => {})
+await as(ADMIN)
+ok((await q(`select is_quote from orders where id = ${QUOTE}`))[0].is_quote === true, 'a worker cannot convert a quote')
+await q(`select convert_quote(${QUOTE})`)
+qt = (await q(`select is_quote, status, order_date from order_totals where id = ${QUOTE}`))[0]
+ok(qt.is_quote === false && qt.status === 'new' && String(qt.order_date) !== '2026-09-01', 'converting turns the quote into a new order dated today')
+ok(Number((await q(`select balance from customer_balances where id = 1`))[0].balance) === balBefore + 132000, 'after conversion it counts on the customer')
+let again = false; try { await q(`select convert_quote(${QUOTE})`) } catch { again = true }
+ok(again, 'an order cannot be converted twice')
+await as(WORKER)
+ok((await q(`select * from orders_public where id = ${QUOTE}`)).length === 1, 'the converted order reaches the workshop')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

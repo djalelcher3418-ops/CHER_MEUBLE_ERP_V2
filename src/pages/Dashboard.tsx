@@ -58,7 +58,7 @@ export default function Dashboard() {
         .order('due_date', { ascending: true, nullsFirst: false }),
     ]).then(([v, l, d, o, mo, cb, ac]) => {
       setReceivable(((cb.data as Pick<CustomerBalance, 'balance'>[]) ?? []).reduce((a, r) => a + Number(r.balance), 0))
-      setActive((ac.data as OrderTotal[]) ?? [])
+      setActive(((ac.data as OrderTotal[]) ?? []).filter((o) => !o.is_quote)) // عروض الأسعار ليست طلبيات جارية
       setStockValue(((v.data as { value: number }[]) ?? []).reduce((a, r) => a + Number(r.value), 0))
       setLow((l.data as MaterialPublic[]) ?? [])
       setDebts((d.data as SupplierBalance[]) ?? [])

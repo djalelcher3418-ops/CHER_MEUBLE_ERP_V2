@@ -203,8 +203,8 @@ export function CustomerPaymentModal({ customerId, customerName, balance, orderI
       .eq('customer_id', customerId)
       .neq('status', 'cancelled')
       .order('order_date', { ascending: false })
-      .then(({ data }) => setOrders((data as OrderTotal[]) ?? []))
-  }, [customerId])
+      .then(({ data }) => setOrders(((data as OrderTotal[]) ?? []).filter((o) => !o.is_quote || o.id === orderId)))
+  }, [customerId, orderId])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
