@@ -48,9 +48,19 @@
 3. الصق محتوى الملف `supabase/functions/send-push/index.ts` ثم Deploy
 4. اترك خيار Verify JWT مفعّلًا. لا حاجة لأي مفتاح: الدالة تنشئ مفاتيحها وتحفظها بنفسها أول مرة.
 
+## المرحلة 7: حسابات الدخول بالهاتف
+- صفحة «الحسابات» (من «المزيد»): إنشاء حساب لكل عامل برقم هاتفه ورمز سري من 6 أرقام، وإرساله له عبر واتساب
+- رمز جديد لمن نسي رمزه، وإيقاف الحساب أو إعادة تفعيله
+- الدخول برقم الهاتف أو بالبريد الإلكتروني (حساب المدير الحالي يبقى كما هو)
+- «حسابي» (بالضغط على الاسم في الأعلى): تغيير الرمز السري وتسجيل الخروج
+
+### نشر دالة الحسابات (مرة واحدة)
+مثل دالة التنبيهات: Supabase → Edge Functions → Deploy a new function → Via Editor،
+الاسم `manage-users`، والصق محتوى `supabase/functions/manage-users/index.ts` ثم Deploy.
+
 ## قاعدة البيانات
 - `supabase/001_phase1.sql` (مُشغَّل مسبقًا على Supabase).
-- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
+- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
 
 ## التشغيل على الكمبيوتر
 ```

@@ -1,15 +1,16 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import Icon, { type IconName } from './components/Icon'
 import Modal from './components/Modal'
 import { useAuth } from './lib/auth'
 import { enablePush, forgetPush } from './lib/push'
-import { configMissing } from './lib/supabase'
+import { arabicError, configMissing, supabase } from './lib/supabase'
 import { useTableLabels } from './lib/useTableLabels'
 import { useUnread } from './lib/useUnread'
 import Login from './pages/Login'
 
 // كل صفحة تُحمَّل عند فتحها فقط، فيفتح التطبيق أسرع على الهاتف
+const Accounts = lazy(() => import('./pages/Accounts'))
 const Chat = lazy(() => import('./pages/Chat'))
 const Customers = lazy(() => import('./pages/Customers'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -43,6 +44,7 @@ const ADMIN_MORE: Tab[] = [
   { to: '/employees', label: 'العمّال', icon: 'employees' },
   { to: '/expenses', label: 'المصاريف', icon: 'expenses' },
   { to: '/reports', label: 'التقرير', icon: 'reports' },
+  { to: '/accounts', label: 'الحسابات', icon: 'key' },
 ]
 const WORKER_TABS: Tab[] = [
   { to: '/workshop', label: 'الورشة', icon: 'workshop' },
@@ -57,6 +59,7 @@ export default function App() {
   const { session, profile, loading, isAdmin, signOut } = useAuth()
   const location = useLocation()
   const [more, setMore] = useState(false)
+  const [account, setAccount] = useState(false)
   const [main, setMain] = useState<HTMLElement | null>(null)
   const unread = useUnread(session && profile?.active ? session.user.id : undefined)
   useTableLabels(main)
@@ -115,10 +118,10 @@ export default function App() {
     <div className="shell">
       <header className="appbar">
         <div className="logo">CM</div>
-        <div className="title">
+        <button className="title appbar-me" onClick={() => setAccount(true)} aria-label="حسابي">
           <strong>CHER MEUBLE</strong>
           <span>{profile.full_name} · {isAdmin ? 'المدير' : 'عامل'}</span>
-        </div>
+        </button>
         <button className="icon-btn" onClick={logout} aria-label="خروج"><Icon name="logout" /></button>
       </header>
 
@@ -137,6 +140,7 @@ export default function App() {
                 <Route path="/employees" element={<Employees />} />
                 <Route path="/expenses" element={<Expenses />} />
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/accounts" element={<Accounts />} />
                 <Route path="/workshop" element={<Workshop />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/scan" element={<ScanOut />} />
@@ -171,6 +175,8 @@ export default function App() {
         )}
       </nav>
 
+      {account && <MyAccount name={profile.full_name} phone={profile.phone} onLogout={logout} onClose={() => setAccount(false)} />}
+
       {more && (
         <Modal title="المزيد" onClose={() => setMore(false)}>
           <div className="more-grid">
@@ -184,5 +190,45 @@ export default function App() {
         </Modal>
       )}
     </div>
+  )
+}
+
+/** حسابي: تغيير الرمز السري وتسجيل الخروج */
+function MyAccount({ name, phone, onLogout, onClose }: { name: string; phone: string | null; onLogout: () => void; onClose: () => void }) {
+  const [pin, setPin] = useState('')
+  const [again, setAgain] = useState('')
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    if (pin.length < 6) return setMsg({ ok: false, text: 'الرمز السري 6 أرقام على الأقل' })
+    if (pin !== again) return setMsg({ ok: false, text: 'الرمزان غير متطابقين' })
+    setBusy(true)
+    const { error } = await supabase.auth.updateUser({ password: pin })
+    setBusy(false)
+    if (error) return setMsg({ ok: false, text: arabicError(error) })
+    setPin('')
+    setAgain('')
+    setMsg({ ok: true, text: 'تم تغيير الرمز السري. استعمله في الدخول القادم.' })
+  }
+
+  return (
+    <Modal title="حسابي" onClose={onClose}>
+      <ul className="list">
+        <li><span className="muted">الاسم</span><strong>{name}</strong></li>
+        {phone && <li><span className="muted">رقم الدخول</span><strong dir="ltr">{phone}</strong></li>}
+      </ul>
+      <form className="form" onSubmit={save} style={{ marginTop: 14 }}>
+        <h3 style={{ margin: 0 }}>تغيير الرمز السري</h3>
+        <div className="grid3">
+          <label>الرمز الجديد<input type="password" dir="ltr" inputMode="numeric" autoComplete="new-password" value={pin} onChange={(e) => setPin(e.target.value)} /></label>
+          <label>أعد كتابته<input type="password" dir="ltr" inputMode="numeric" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} /></label>
+        </div>
+        {msg && <p className={msg.ok ? 'success' : 'error'}>{msg.text}</p>}
+        <button type="submit" disabled={busy}>{busy ? '…' : 'حفظ الرمز'}</button>
+      </form>
+      <button className="danger big-btn" style={{ marginTop: 18 }} onClick={onLogout}>تسجيل الخروج</button>
+    </Modal>
   )
 }

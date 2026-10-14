@@ -20,6 +20,7 @@ const PATHS: Record<string, string> = {
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
   team: 'M9 8a3.5 3.5 0 1 0 0 .01M2.5 20c.6-3.5 3.3-5.5 6.5-5.5s5.9 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2 .6 3.2 2.5 3.5 5.5',
   close: 'M6 6l12 12M18 6L6 18',
+  key: 'M15.5 7.5a3.5 3.5 0 1 0 0 .01M13 10l-9 9M7 16l2 2M10 13l2 2',
 }
 
 export type IconName = keyof typeof PATHS

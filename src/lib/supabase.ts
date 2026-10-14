@@ -18,7 +18,9 @@ export const num = (n: number | null | undefined) =>
 /** رسالة خطأ مفهومة بالعربية */
 export function arabicError(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? String(e)
-  if (msg.includes('Invalid login credentials')) return 'البريد أو كلمة المرور غير صحيحة'
+  if (msg.includes('Invalid login credentials')) return 'رقم الهاتف (أو البريد) أو الرمز السري غير صحيح'
+  if (msg.includes('banned')) return 'هذا الحساب موقوف. اتصل بالمدير.'
+  if (msg.includes('Password should be')) return 'الرمز السري قصير أو ضعيف'
   if (msg.includes('duplicate key') && msg.includes('barcode')) return 'هذا الباركود مستعمل لمادة أخرى'
   if (msg.includes('duplicate key')) return 'هذه القيمة موجودة من قبل'
   if (msg.includes('foreign key')) return 'لا يمكن الحذف لأنه مرتبط بسجلات أخرى'

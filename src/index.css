@@ -391,3 +391,7 @@ td input, td select { min-width: 90px; min-height: 40px; padding: 7px 9px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* زر «حسابي» في الشريط العلوي */
+.appbar .appbar-me { background: none; color: inherit; padding: 0; min-height: 0; display: block; text-align: start; border-radius: 8px; font-weight: inherit; }
+.appbar .appbar-me:active { transform: none; opacity: .7; }

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { loginEmail } from '../lib/phone'
 import { arabicError, supabase } from '../lib/supabase'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [id, setId] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -11,7 +12,7 @@ export default function Login() {
     e.preventDefault()
     setBusy(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(id), password })
     if (error) setError(arabicError(error))
     setBusy(false)
   }
@@ -23,15 +24,16 @@ export default function Login() {
         <h1 className="brand big">CHER MEUBLE</h1>
         <p className="muted center" style={{ margin: 0 }}>نظام تسيير الورشة — سجّل دخولك</p>
         <label>
-          البريد الإلكتروني
-          <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" />
+          رقم الهاتف أو البريد الإلكتروني
+          <input dir="ltr" inputMode="email" value={id} onChange={(e) => setId(e.target.value)} placeholder="0555123456" required autoComplete="username" />
         </label>
         <label>
-          كلمة المرور
+          الرمز السري
           <input type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit" className="big-btn" disabled={busy}>{busy ? '…' : 'دخول'}</button>
+        <p className="muted center" style={{ margin: 0 }}>نسيت الرمز؟ اطلب من المدير رمزًا جديدًا.</p>
       </form>
     </div>
   )
