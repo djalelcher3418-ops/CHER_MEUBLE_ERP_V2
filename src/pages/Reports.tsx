@@ -2,7 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { monthRange, thisMonth } from '../lib/payroll'
 import { arabicError, dzd, supabase, todayISO } from '../lib/supabase'
-import type { ExpenseCategory, OrderTotal } from '../lib/types'
+import type { OrderTotal } from '../lib/types'
+
+/** ما ترجعه الدالة month_summary من قاعدة البيانات */
+export interface MonthSummary {
+  received: number
+  suppliers: number
+  payroll: number
+  advances: number
+  expenses: number
+  purchases: number
+  materials_out: number
+  expenses_by_category: { name: string; sum: number }[]
+}
 
 interface Data {
   received: number
@@ -40,36 +52,23 @@ export default function Reports() {
 
   useEffect(() => {
     const { from, to } = monthRange(month)
-    const toTs = new Date(`${to}T23:59:59.999`).toISOString()
-    const fromTs = new Date(`${from}T00:00:00`).toISOString()
     Promise.all([
-      supabase.from('customer_payments').select('amount').gte('paid_on', from).lte('paid_on', to),
-      supabase.from('supplier_payments').select('amount').gte('paid_on', from).lte('paid_on', to),
-      supabase.from('payroll_payments').select('amount').gte('paid_on', from).lte('paid_on', to),
-      supabase.from('employee_advances').select('amount').gte('given_on', from).lte('given_on', to),
-      supabase.from('expenses').select('amount, category_id').gte('spent_on', from).lte('spent_on', to),
-      supabase.from('expense_categories').select('*'),
-      supabase.from('purchase_totals').select('total').gte('purchase_date', from).lte('purchase_date', to),
-      supabase.from('stock_movements').select('qty, unit_cost').eq('type', 'out').gte('created_at', fromTs).lte('created_at', toTs),
+      // المجاميع تُحسب في قاعدة البيانات، فلا يضيع شيء مهما كثرت الحركات
+      supabase.rpc('month_summary', { p_from: from, p_to: to }),
       supabase.from('order_totals').select('*').eq('status', 'delivered').gte('delivered_on', from).lte('delivered_on', to).order('delivered_on'),
-    ]).then(([cp, sp, pp, adv, ex, cats, pu, mo, del]) => {
-      const err = [cp, sp, pp, adv, ex, cats, pu, mo, del].find((r) => r.error)?.error
+    ]).then(([ms, del]) => {
+      const err = ms.error ?? del.error
       if (err) setError(arabicError(err))
-      type Amt = { amount: number }
-      const exRows = (ex.data as { amount: number; category_id: number | null }[]) ?? []
-      const catList = (cats.data as ExpenseCategory[]) ?? []
+      const s = (ms.data ?? {}) as Partial<MonthSummary>
       setD({
-        received: sum(cp.data as Amt[], (r) => Number(r.amount)),
-        suppliers: sum(sp.data as Amt[], (r) => Number(r.amount)),
-        payroll: sum(pp.data as Amt[], (r) => Number(r.amount)),
-        advances: sum(adv.data as Amt[], (r) => Number(r.amount)),
-        expenses: sum(exRows, (r) => Number(r.amount)),
-        expByCat: catList
-          .map((c) => ({ name: c.name, sum: sum(exRows.filter((r) => r.category_id === c.id), (r) => Number(r.amount)) }))
-          .filter((c) => c.sum > 0)
-          .sort((a, b) => b.sum - a.sum),
-        purchases: sum(pu.data as { total: number }[], (r) => Number(r.total)),
-        materialsOut: sum(mo.data as { qty: number; unit_cost: number | null }[], (r) => Number(r.qty) * Number(r.unit_cost ?? 0)),
+        received: Number(s.received ?? 0),
+        suppliers: Number(s.suppliers ?? 0),
+        payroll: Number(s.payroll ?? 0),
+        advances: Number(s.advances ?? 0),
+        expenses: Number(s.expenses ?? 0),
+        expByCat: (s.expenses_by_category ?? []).map((c) => ({ name: c.name, sum: Number(c.sum) })),
+        purchases: Number(s.purchases ?? 0),
+        materialsOut: Number(s.materials_out ?? 0),
         delivered: (del.data as OrderTotal[]) ?? [],
       })
     })

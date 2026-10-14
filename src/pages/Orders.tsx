@@ -360,8 +360,11 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const subtotal = lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0)
+  // نحسب فقط الأسطر التي ستُحفظ فعلًا (لها بيان وكمية)
+  const isValid = (l: Line) => !!l.description.trim() && Number(l.qty) > 0
+  const subtotal = lines.filter(isValid).reduce((a, l) => a + Number(l.qty) * (Number(l.unit_price) || 0), 0)
   const total = subtotal - (Number(discount) || 0)
+  const ignored = lines.filter((l) => !isValid(l) && (l.description.trim() || Number(l.unit_price) > 0)).length
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)))
@@ -369,43 +372,30 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    const valid = lines.filter((l) => l.description.trim() && Number(l.qty) > 0)
+    const valid = lines.filter(isValid)
     if (!customerId) return setError('اختر الزبون')
     if (!valid.length) return setError('أضف سطرًا واحدًا على الأقل')
     if (total < 0) return setError('التخفيض أكبر من المجموع')
     setBusy(true)
     setError('')
 
-    const row = {
-      customer_id: Number(customerId),
-      title: title.trim(),
-      order_date: orderDate,
-      due_date: dueDate || null,
-      notes: notes.trim() || null,
-      discount: Number(discount) || 0,
-    }
-    const itemRows = (orderId: number) =>
-      valid.map((l) => ({ order_id: orderId, description: l.description.trim(), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 }))
+    // الطلبية وأسطرها تُحفظ دفعة واحدة في قاعدة البيانات: إمّا كلها أو لا شيء
+    const { data, error: saveErr } = await supabase.rpc('save_order', {
+      p_id: order?.id ?? null,
+      p_order: {
+        customer_id: Number(customerId),
+        title: title.trim(),
+        order_date: orderDate,
+        due_date: dueDate || '',
+        notes: notes.trim(),
+        discount: Number(discount) || 0,
+      },
+      p_items: valid.map((l) => ({ description: l.description.trim(), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
+    })
+    if (saveErr) { setBusy(false); return setError(arabicError(saveErr)) }
+    const orderId = Number(data)
+    if (order) return onDone(orderId)
 
-    if (order) {
-      const u = await supabase.from('orders').update(row).eq('id', order.id)
-      if (u.error) { setBusy(false); return setError(arabicError(u.error)) }
-      const del = await supabase.from('order_items').delete().eq('order_id', order.id)
-      if (del.error) { setBusy(false); return setError(arabicError(del.error)) }
-      const ins = await supabase.from('order_items').insert(itemRows(order.id))
-      if (ins.error) { setBusy(false); return setError('حُذفت الأسطر القديمة ولم تُحفظ الجديدة: ' + arabicError(ins.error)) }
-      return onDone(order.id)
-    }
-
-    const o = await supabase.from('orders').insert(row).select('id').single()
-    if (o.error) { setBusy(false); return setError(arabicError(o.error)) }
-    const orderId = (o.data as { id: number }).id
-    const ins = await supabase.from('order_items').insert(itemRows(orderId))
-    if (ins.error) {
-      await supabase.from('orders').delete().eq('id', orderId)
-      setBusy(false)
-      return setError(arabicError(ins.error))
-    }
     if (Number(deposit) > 0) {
       const pay = await supabase.from('customer_payments').insert({
         customer_id: Number(customerId), order_id: orderId, amount: Number(deposit), paid_on: orderDate, method, notes: 'عربون',
@@ -453,6 +443,7 @@ function OrderForm({ customers, order, items, onClose, onDone }: {
           <div className="stat-inline">المجموع: {dzd(subtotal)}</div>
           <div className="stat-inline total">الصافي: {dzd(total)}</div>
         </div>
+        {ignored > 0 && <p className="error">{ignored === 1 ? 'سطر واحد ناقص' : `${ignored} أسطر ناقصة`} (بلا بيان أو بلا كمية) ولن يُحفظ ولا يدخل في المجموع.</p>}
 
         {!order && (
           <div className="grid3">

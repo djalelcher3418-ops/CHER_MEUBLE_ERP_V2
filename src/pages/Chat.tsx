@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { sendPush } from '../lib/push'
-import { signedUrls, uploadChatImage, type ChatRead, type ChatSummary, type Message } from '../lib/chat'
+import { IMAGE_URL_REFRESH_MS, signedUrls, uploadChatImage, type ChatRead, type ChatSummary, type Message } from '../lib/chat'
 import { MONTHS } from '../lib/payroll'
 import { arabicError, supabase, todayISO } from '../lib/supabase'
 
@@ -88,11 +88,22 @@ export default function Chat() {
     }
   }, [chatId, me, markRead, loadReads])
 
-  // روابط الصور
+  // روابط الصور: نطلب كل صورة مرة واحدة فقط (لا نعيد المحاولة في حلقة إن فشلت)،
+  // ونجدّد كل الروابط قبل انتهاء صلاحيتها إن بقيت الدردشة مفتوحة طويلًا
+  const requested = useRef(new Set<string>())
   useEffect(() => {
-    const paths = msgs.map((m) => m.image_path).filter((p): p is string => !!p && !urls.has(p))
-    if (paths.length) signedUrls(paths).then((got) => setUrls((old) => new Map([...old, ...got])))
+    const paths = msgs.map((m) => m.image_path).filter((p): p is string => !!p && !requested.current.has(p))
+    if (!paths.length) return
+    paths.forEach((p) => requested.current.add(p))
+    signedUrls(paths).then((got) => { if (got.size) setUrls((old) => new Map([...old, ...got])) })
   }, [msgs, urls])
+  useEffect(() => {
+    const t = setInterval(() => {
+      requested.current.clear()
+      setUrls(new Map())
+    }, IMAGE_URL_REFRESH_MS)
+    return () => clearInterval(t)
+  }, [])
 
   // النزول لآخر رسالة
   useLayoutEffect(() => {
@@ -147,7 +158,7 @@ export default function Chat() {
     if (!confirm('حذف هذه الرسالة؟')) return
     const { error } = await supabase.from('messages').delete().eq('id', m.id)
     if (error) return setError(arabicError(error))
-    if (m.image_path) supabase.storage.from('chat').remove([m.image_path]).then(() => {})
+    if (m.image_path) await supabase.storage.from('chat').remove([m.image_path]) // الصورة تُحذف مع رسالتها
     setMsgs((list) => list.filter((x) => x.id !== m.id))
     setPicked(null)
   }

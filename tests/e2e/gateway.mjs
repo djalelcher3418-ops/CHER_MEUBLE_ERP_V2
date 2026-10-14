@@ -69,7 +69,7 @@ http.createServer(async (req, res) => {
       if (req.method === 'POST') {
         const dup = (await db.query('select 1 from auth.users where email = $1', [b.email])).rowCount
         if (dup) return send(res, 422, { code: 'email_exists', msg: 'A user with this email address has already been registered' })
-        const r = await db.query('insert into auth.users (email, password, raw_user_meta_data) values ($1, $2, $3) returning *', [b.email, b.password, b.user_metadata ?? {}])
+        const r = await db.query('insert into auth.users (email, password, raw_user_meta_data, raw_app_meta_data) values ($1, $2, $3, $4) returning *', [b.email, b.password, b.user_metadata ?? {}, b.app_metadata ?? {}])
         return send(res, 200, session(r.rows[0]).user)
       }
       const id = u.pathname.split('/').pop()

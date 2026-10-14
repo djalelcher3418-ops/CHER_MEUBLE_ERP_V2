@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
       password: input.pin,
       email_confirm: true,
       user_metadata: { full_name: name },
+      app_metadata: { created_by_admin: true }, // لا يستطيع أحد غير الخادم وضع هذه العلامة
     })
     if (error || !created?.user) {
       const msg = String(error?.message ?? '')

@@ -40,6 +40,11 @@ export default function Status() {
         </ol>
         <h3 style={{ marginTop: 16 }}>كيف أنشر دالة؟</h3>
         <p style={{ margin: 0 }}>في Supabase: Edge Functions ← Deploy a new function ← Via Editor، ثم اكتب اسم الدالة والصق ملفها ← Deploy.</p>
+        <h3 style={{ marginTop: 16 }}>أغلق التسجيل المفتوح (مهم)</h3>
+        <p style={{ margin: 0 }}>
+          الحسابات تُنشأ من صفحة «الحسابات» فقط. في Supabase: Authentication ← Sign In / Providers ← أطفئ
+          «Allow new users to sign up». حتى لو بقي مفتوحًا، أي حساب يُسجَّل من الخارج يبقى موقوفًا بعد تشغيل 009.
+        </p>
       </section>
     </div>
   )

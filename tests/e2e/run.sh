@@ -15,7 +15,7 @@ $P -c 'drop database if exists erp with (force)' -c 'create database erp' >/dev/
 $P -d erp -f "$E/supabase-stubs.sql" >/dev/null 2>&1
 for f in "$R"/supabase/0*.sql; do $P -d erp -f "$f" >/dev/null; done
 $P -d erp -c "insert into auth.users (email, password, raw_user_meta_data) values ('admin@test.dz','secret1','{\"full_name\":\"جلال\"}')" \
-           -c "insert into auth.users (email, password, raw_user_meta_data) values ('0661000000@cher-meuble.app','123456','{\"full_name\":\"كريم\"}')" \
+           -c "insert into auth.users (email, password, raw_user_meta_data, raw_app_meta_data) values ('0661000000@cher-meuble.app','123456','{\"full_name\":\"كريم\"}','{\"created_by_admin\":true}')" \
            -c "update profiles set phone='0661000000' where full_name='كريم'" >/dev/null
 
 (cd "$R" && VITE_SUPABASE_URL=http://localhost:4174 VITE_SUPABASE_ANON_KEY=$ANON npx vite build --outDir "$W/dist" --emptyOutDir >/dev/null)

@@ -13,7 +13,7 @@ const ok = (c, m) => { if (!c) { console.error('FAIL', m); failed++; process.exi
 await db.exec(`
 create role anon nologin; create role authenticated nologin;
 create schema auth;
-create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb);
+create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb, raw_app_meta_data jsonb default '{}');
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
@@ -257,6 +257,78 @@ await db.exec('reset role')
 await db.exec(fs.readFileSync(R + '/supabase/008_version.sql', 'utf8'))
 await as(WORKER)
 ok((await q(`select erp_schema_version() as v`))[0].v === 8, 'schema version is 8')
+
+// --- phase 9: hardening
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/009_hardening.sql', 'utf8'))
+await as(WORKER)
+ok((await q(`select erp_schema_version() as v`))[0].v === 9, 'schema version is 9')
+await db.exec('reset role')
+const STRANGER = '00000000-0000-0000-0000-0000000000e1', INVITED = '00000000-0000-0000-0000-0000000000e2'
+await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${STRANGER}', 'x@evil.com', '{"full_name":"غريب"}')`)
+await db.exec(`insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values ('${INVITED}', '0550000000@cher-meuble.app', '{"full_name":"مدعو"}', '{"created_by_admin":true}')`)
+let sp = await q(`select id, role, active from profiles where id in ('${STRANGER}', '${INVITED}') order by id`)
+ok(sp[0].active === false && sp[0].role === 'worker', 'an open sign-up stays inactive')
+ok(sp[1].active === true, 'an account created by the manager is active')
+await as(STRANGER)
+ok((await q(`select * from materials_public`)).length === 0 && (await q(`select * from orders_public`)).length === 0, 'inactive sign-up sees no materials and no orders')
+let strangerOut = false; try { await q(`insert into stock_movements (material_id, type, qty, created_by) values (1, 'out', 1, '${STRANGER}')`) } catch { strangerOut = true }
+ok(strangerOut, 'inactive sign-up cannot take material out')
+let strangerChat = false; try { await q(`insert into messages (chat_id, body) values (1, 'spam')`) } catch { strangerChat = true }
+ok(strangerChat, 'inactive sign-up cannot post in the team chat')
+
+await as(ADMIN)
+await q(`insert into orders (customer_id, title) values (1, 'خزانة مفتوحة')`)
+const OPEN = (await q(`select id from orders where title = 'خزانة مفتوحة'`))[0].id
+await as(WORKER)
+await q(`insert into stock_movements (material_id, type, qty, unit_cost, order_id, created_by) values (1, 'out', 1, 999999, ${OPEN}, '${WORKER}')`)
+let mv = (await q(`select unit_cost from stock_movements where order_id = ${OPEN}`))[0]
+ok(Number(mv.unit_cost) === 5000, `a fake cost from the app is replaced by the real average cost (${mv.unit_cost})`)
+let tooMuch = null; try { await q(`insert into stock_movements (material_id, type, qty, created_by) values (1, 'out', 500, '${WORKER}')`) } catch (e) { tooMuch = e.message }
+ok(tooMuch?.includes('الكمية غير كافية'), `worker cannot take more than the stock: ${tooMuch}`)
+let closed = false; try { await q(`insert into stock_movements (material_id, type, qty, order_id, created_by) values (1, 'out', 1, 2, '${WORKER}')`) } catch { closed = true }
+ok(closed, 'worker cannot book material against a delivered order')
+await as(ADMIN)
+await q(`insert into stock_movements (material_id, type, qty) values (1, 'out', 500)`)
+ok(Number((await q(`select qty from materials where id = 1`))[0].qty) < 0, 'the manager can still go below zero when needed')
+await q(`insert into stock_movements (material_id, type, qty, unit_cost) values (1, 'adjust', 600, 5000)`)
+
+// save_order: atomic
+let newId = (await q(`select save_order(null, '{"customer_id":1,"title":"طاولة","order_date":"2026-10-01","discount":1000}', '[{"description":"طاولة","qty":1,"unit_price":20000},{"description":"كراسي","qty":4,"unit_price":3000}]') as id`))[0].id
+let so = (await q(`select total from order_totals where id = ${newId}`))[0]
+ok(Number(so.total) === 31000, `save_order creates the order and lines together (total ${so.total})`)
+let bigDisc = null; try { await q(`select save_order(null, '{"customer_id":1,"title":"x","order_date":"2026-10-01","discount":99999}', '[{"description":"a","qty":1,"unit_price":10}]')`) } catch (e) { bigDisc = e.message }
+ok(bigDisc?.includes('التخفيض أكبر'), 'a discount bigger than the lines is refused')
+ok((await q(`select * from orders where title = 'x'`)).length === 0, 'nothing is saved when it is refused')
+let badLine = false; try { await q(`select save_order(${newId}, '{"customer_id":1,"title":"طاولة","order_date":"2026-10-01","discount":0}', '[{"description":"سطر خاطئ","qty":0,"unit_price":5}]')`) } catch { badLine = true }
+let kept = await q(`select count(*)::int n from order_items where order_id = ${newId}`)
+ok(badLine && kept[0].n === 2, 'a failed edit keeps the old lines (no order left empty)')
+await q(`select save_order(${newId}, '{"customer_id":1,"title":"طاولة كبيرة","order_date":"2026-10-01","discount":0}', '[{"description":"طاولة","qty":1,"unit_price":25000}]')`)
+so = (await q(`select title, total from order_totals where id = ${newId}`))[0]
+ok(so.title === 'طاولة كبيرة' && Number(so.total) === 25000, 'a valid edit replaces the lines')
+await as(WORKER)
+let workerSave = false; try { await q(`select save_order(null, '{"customer_id":1,"title":"w","order_date":"2026-10-01"}', '[{"description":"a","qty":1,"unit_price":1}]')`) } catch { workerSave = true }
+ok(workerSave, 'a worker cannot create orders through save_order')
+
+// month_summary
+await as(ADMIN)
+const ms = (await q(`select month_summary(date_trunc('month', current_date)::date, (date_trunc('month', current_date) + interval '1 month - 1 day')::date) as s`))[0].s
+ok(Number(ms.expenses) === 30000 && ms.expenses_by_category.length === 1, `month summary adds up expenses by category (${ms.expenses})`)
+ok(Number(ms.materials_out) > 0 && Number(ms.received) === 50000, `month summary includes material out and payments (${ms.materials_out}, ${ms.received})`)
+await as(WORKER)
+const wms = (await q(`select month_summary(current_date - 31, current_date) as s`))[0].s
+ok(Number(wms.expenses) === 0 && Number(wms.received) === 0, 'a worker gets zeros from the month summary')
+
+// photo deletion
+await as(WORKER)
+await q(`insert into storage.objects (bucket_id, name) values ('chat', '1/team-by-worker.jpg')`)
+ok((await q(`delete from storage.objects where name = '${C1}/p.jpg' returning id`)).length === 1, 'a worker can delete their own photo')
+await as(ADMIN)
+await q(`insert into storage.objects (bucket_id, name) values ('chat', '1/team-by-admin.jpg')`)
+await as(WORKER)
+ok((await q(`delete from storage.objects where name = '1/team-by-admin.jpg' returning id`)).length === 0, "a worker cannot delete the manager's photo")
+await as(ADMIN)
+ok((await q(`delete from storage.objects where name = '1/team-by-worker.jpg' returning id`)).length === 1, "the manager can delete a worker's photo")
 
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)

@@ -54,17 +54,32 @@ export async function uploadChatImage(chatId: number, file: File): Promise<strin
   return path
 }
 
-const urlCache = new Map<string, string>()
+const URL_TTL_S = 3600
+const URL_REUSE_MS = 45 * 60 * 1000 // نجدّد الرابط قبل انتهاء صلاحيته
+const urlCache = new Map<string, { url: string; at: number }>()
+const fresh = (p: string) => {
+  const c = urlCache.get(p)
+  return c && Date.now() - c.at < URL_REUSE_MS ? c.url : undefined
+}
 
 /** روابط مؤقتة (ساعة) لعرض الصور الخاصة */
 export async function signedUrls(paths: string[]): Promise<Map<string, string>> {
-  const missing = paths.filter((p) => !urlCache.has(p))
+  const missing = paths.filter((p) => !fresh(p))
   if (missing.length) {
-    const { data } = await supabase.storage.from('chat').createSignedUrls(missing, 3600)
-    for (const d of data ?? []) if (d.path && d.signedUrl) urlCache.set(d.path, d.signedUrl)
+    const { data } = await supabase.storage.from('chat').createSignedUrls(missing, URL_TTL_S)
+    const now = Date.now()
+    for (const d of data ?? []) if (d.path && d.signedUrl) urlCache.set(d.path, { url: d.signedUrl, at: now })
   }
-  return new Map(paths.filter((p) => urlCache.has(p)).map((p) => [p, urlCache.get(p)!]))
+  const out = new Map<string, string>()
+  for (const p of paths) {
+    const u = fresh(p)
+    if (u) out.set(p, u)
+  }
+  return out
 }
+
+/** مدة صلاحية روابط الصور المعروضة قبل طلب روابط جديدة */
+export const IMAGE_URL_REFRESH_MS = URL_REUSE_MS
 
 /** تنبيه على الهاتف عندما يكون التطبيق في الخلفية (بعد موافقة المستخدم) */
 export async function notify(title: string, body: string) {

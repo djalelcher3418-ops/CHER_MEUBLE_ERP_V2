@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Modal from '../components/Modal'
-import { arabicError, dzd, supabase } from '../lib/supabase'
+import { arabicError, dzd, supabase, todayISO } from '../lib/supabase'
 import { PAY_LABELS, type PayMethod, type PurchaseTotal, type Supplier, type SupplierBalance } from '../lib/types'
 
 type Draft = { id?: number; name: string; phone: string; address: string; notes: string; opening_balance: string }
@@ -153,7 +153,7 @@ export default function Suppliers() {
 
 function PaymentModal({ supplier, onClose, onDone }: { supplier: SupplierBalance; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayISO)
   const [method, setMethod] = useState<PayMethod>('cash')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Modal from '../components/Modal'
-import { arabicError, dzd, num, supabase } from '../lib/supabase'
+import { arabicError, dzd, num, supabase, todayISO } from '../lib/supabase'
 import { PAY_LABELS, UNIT_LABELS, type Material, type PayMethod, type PurchaseTotal, type Supplier } from '../lib/types'
 
 type Line = { material_id: string; qty: string; unit_price: string }
@@ -125,7 +125,7 @@ function NewPurchase({ suppliers, materials, onClose, onDone }: {
   onDone: () => void
 }) {
   const [supplierId, setSupplierId] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayISO)
   const [ref, setRef] = useState('')
   const [lines, setLines] = useState<Line[]>([{ ...emptyLine }])
   const [paid, setPaid] = useState('')

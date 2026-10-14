@@ -17,7 +17,7 @@ interface MyMove {
 const READER_ID = 'barcode-reader'
 
 export default function ScanOut() {
-  const { session } = useAuth()
+  const { session, isAdmin } = useAuth()
   const [materials, setMaterials] = useState<MaterialPublic[]>([])
   const [code, setCode] = useState('')
   const [found, setFound] = useState<MaterialPublic | null>(null)
@@ -109,6 +109,12 @@ export default function ScanOut() {
     if (!found) return
     const q = Number(qty)
     if (!(q > 0)) return setMsg({ ok: false, text: 'اكتب كمية صحيحة' })
+    const have = Number(found.qty)
+    if (q > have) {
+      // العامل لا يستطيع إخراج أكثر من الموجود؛ المدير يُسأل للتأكيد (مثلًا مشتريات لم تُسجَّل بعد)
+      if (!isAdmin) return setMsg({ ok: false, text: `الكمية أكبر من الموجود في المخزون (${num(have)} ${UNIT_LABELS[found.unit]}). أخبر المدير.` })
+      if (!confirm(`الموجود ${num(have)} فقط. إخراج ${num(q)} سيجعل المخزون بالسالب. متابعة؟`)) return
+    }
     const { error } = await supabase.from('stock_movements').insert({
       material_id: found.id,
       type: 'out',

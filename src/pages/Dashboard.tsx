@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { checkDatabase } from '../lib/health'
+import { monthRange, thisMonth } from '../lib/payroll'
 import { dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
   ORDER_STATUS_LABELS,
@@ -37,9 +38,7 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    monthStart.setHours(0, 0, 0, 0)
+    const { from, to } = monthRange(thisMonth())
     Promise.all([
       supabase.from('stock_value').select('value'),
       supabase.from('materials_public').select('*').eq('low_stock', true).order('name'),
@@ -50,7 +49,7 @@ export default function Dashboard() {
         .eq('type', 'out')
         .order('created_at', { ascending: false })
         .limit(10),
-      supabase.from('stock_movements').select('qty, unit_cost').eq('type', 'out').gte('created_at', monthStart.toISOString()),
+      supabase.rpc('month_summary', { p_from: from, p_to: to }),
       supabase.from('customer_balances').select('balance').gt('balance', 0),
       supabase
         .from('order_totals')
@@ -64,7 +63,7 @@ export default function Dashboard() {
       setLow((l.data as MaterialPublic[]) ?? [])
       setDebts((d.data as SupplierBalance[]) ?? [])
       setOuts((o.data as unknown as OutRow[]) ?? [])
-      setMonthOut(((mo.data as { qty: number; unit_cost: number | null }[]) ?? []).reduce((a, r) => a + Number(r.qty) * Number(r.unit_cost ?? 0), 0))
+      setMonthOut(Number((mo.data as { materials_out?: number } | null)?.materials_out ?? 0))
     })
   }, [])
 
