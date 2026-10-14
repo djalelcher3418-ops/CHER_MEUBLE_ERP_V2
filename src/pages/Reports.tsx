@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { monthRange, thisMonth } from '../lib/payroll'
-import { arabicError, dzd, supabase } from '../lib/supabase'
+import { arabicError, dzd, supabase, todayISO } from '../lib/supabase'
 import type { ExpenseCategory, OrderTotal } from '../lib/types'
 
 interface Data {
@@ -23,6 +23,20 @@ export default function Reports() {
   const [month, setMonth] = useState(thisMonth)
   const [d, setD] = useState<Data | null>(null)
   const [error, setError] = useState('')
+  const [exporting, setExporting] = useState<'' | 'month' | 'backup'>('')
+
+  async function runExport(kind: 'month' | 'backup') {
+    setExporting(kind)
+    setError('')
+    try {
+      const x = await import('../lib/exportXlsx')
+      if (kind === 'month') await x.exportMonth(month)
+      else await x.exportBackup(todayISO())
+    } catch (e) {
+      setError('تعذّر إنشاء ملف Excel: ' + arabicError(e))
+    }
+    setExporting('')
+  }
 
   useEffect(() => {
     const { from, to } = monthRange(month)
@@ -68,6 +82,10 @@ export default function Reports() {
       <div className="page-head">
         <h2>تقرير الشهر</h2>
         <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} style={{ maxWidth: 200 }} />
+      </div>
+      <div className="toolbar">
+        <button className="secondary" onClick={() => runExport('month')} disabled={!!exporting}>{exporting === 'month' ? 'جارٍ التحضير…' : 'تنزيل Excel لهذا الشهر'}</button>
+        <button className="secondary" onClick={() => runExport('backup')} disabled={!!exporting}>{exporting === 'backup' ? 'جارٍ التحضير…' : 'نسخة احتياطية كاملة (Excel)'}</button>
       </div>
       {error && <p className="error">{error}</p>}
       {!d ? <p className="muted">جارٍ التحميل…</p> : <ReportBody d={d} label={label} />}

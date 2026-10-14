@@ -21,6 +21,8 @@ const PATHS: Record<string, string> = {
   team: 'M9 8a3.5 3.5 0 1 0 0 .01M2.5 20c.6-3.5 3.3-5.5 6.5-5.5s5.9 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2 .6 3.2 2.5 3.5 5.5',
   close: 'M6 6l12 12M18 6L6 18',
   key: 'M15.5 7.5a3.5 3.5 0 1 0 0 .01M13 10l-9 9M7 16l2 2M10 13l2 2',
+  designer: 'M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6',
+  status: 'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12l2 2 4-4',
 }
 
 export type IconName = keyof typeof PATHS

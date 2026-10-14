@@ -11,6 +11,7 @@ import Login from './pages/Login'
 
 // كل صفحة تُحمَّل عند فتحها فقط، فيفتح التطبيق أسرع على الهاتف
 const Accounts = lazy(() => import('./pages/Accounts'))
+const Status = lazy(() => import('./pages/Status'))
 const Chat = lazy(() => import('./pages/Chat'))
 const Customers = lazy(() => import('./pages/Customers'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -27,7 +28,7 @@ const ScanOut = lazy(() => import('./pages/ScanOut'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
 const Workshop = lazy(() => import('./pages/Workshop'))
 
-type Tab = { to: string; label: string; icon: IconName; end?: boolean }
+type Tab = { to: string; label: string; icon: IconName; end?: boolean; external?: boolean }
 
 const ADMIN_TABS: Tab[] = [
   { to: '/', label: 'الرئيسية', icon: 'home', end: true },
@@ -45,6 +46,8 @@ const ADMIN_MORE: Tab[] = [
   { to: '/expenses', label: 'المصاريف', icon: 'expenses' },
   { to: '/reports', label: 'التقرير', icon: 'reports' },
   { to: '/accounts', label: 'الحسابات', icon: 'key' },
+  { to: '/designer/', label: 'مصمم الأثاث', icon: 'designer', external: true },
+  { to: '/status', label: 'حالة النظام', icon: 'status' },
 ]
 const WORKER_TABS: Tab[] = [
   { to: '/workshop', label: 'الورشة', icon: 'workshop' },
@@ -141,6 +144,7 @@ export default function App() {
                 <Route path="/expenses" element={<Expenses />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/accounts" element={<Accounts />} />
+                <Route path="/status" element={<Status />} />
                 <Route path="/workshop" element={<Workshop />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/scan" element={<ScanOut />} />
@@ -180,7 +184,12 @@ export default function App() {
       {more && (
         <Modal title="المزيد" onClose={() => setMore(false)}>
           <div className="more-grid">
-            {ADMIN_MORE.map((t) => (
+            {ADMIN_MORE.map((t) => t.external ? (
+              <a key={t.to} href={t.to}>
+                <Icon name={t.icon} />
+                {t.label}
+              </a>
+            ) : (
               <NavLink key={t.to} to={t.to} onClick={() => setMore(false)} className={({ isActive }) => (isActive ? 'active' : '')}>
                 <Icon name={t.icon} />
                 {t.label}

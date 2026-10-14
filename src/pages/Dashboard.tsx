@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { checkDatabase } from '../lib/health'
 import { dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
   ORDER_STATUS_LABELS,
@@ -29,6 +30,11 @@ export default function Dashboard() {
   const [receivable, setReceivable] = useState(0)
   const [active, setActive] = useState<OrderTotal[]>([])
   const today = todayISO()
+  const [setupMissing, setSetupMissing] = useState(0)
+
+  useEffect(() => {
+    checkDatabase().then((c) => setSetupMissing(c.filter((x) => !x.ok).length))
+  }, [])
 
   useEffect(() => {
     const monthStart = new Date()
@@ -67,6 +73,9 @@ export default function Dashboard() {
   return (
     <div>
       <h2>الرئيسية</h2>
+      {setupMissing > 0 && (
+        <p className="error">الإعداد غير مكتمل: ينقص {setupMissing} من ملفات قاعدة البيانات، فبعض الصفحات لن تعمل. <Link to="/status">افتح حالة النظام</Link></p>
+      )}
       <div className="stats">
         <div className="stat"><span>طلبيات جارية</span><strong>{active.length}</strong></div>
         <div className="stat"><span>لك عند الزبائن</span><strong>{dzd(receivable)}</strong></div>

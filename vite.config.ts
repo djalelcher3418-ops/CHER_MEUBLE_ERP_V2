@@ -8,7 +8,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'sw-notify.js'],
-      workbox: { importScripts: ['sw-notify.js'] },
+      workbox: {
+        importScripts: ['sw-notify.js'],
+        // المصمم صفحة مستقلة: لا نعرض مكانها التطبيق عند فتحها
+        navigateFallbackDenylist: [/^\/designer/],
+        // ملفات كبيرة لا يحتاجها الجميع: تُحمَّل عند الحاجة فقط
+        globIgnores: ['**/designer/**', '**/xlsx-*.js'],
+      },
       manifest: {
         name: 'CHER MEUBLE',
         short_name: 'CHER MEUBLE',
