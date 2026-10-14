@@ -81,6 +81,10 @@ npm run dev
 - Build output directory: `dist`
 - Environment variables: `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY` و `NODE_VERSION=22`
 
+## الاختبارات
+- `npm run test:db`: يشغّل كل ملفات `supabase/*.sql` على Postgres داخل Node ويتحقق من الأرقام والصلاحيات (بدون أي إعداد).
+- `tests/e2e/run.sh`: اختبار شامل للتطبيق الحقيقي على Postgres وPostgREST والدالتين، بدور المدير والعامل. انظر `tests/e2e/README.md`.
+
 ## أدوات مستقلة في نفس المستودع
 
 هذه صفحات HTML منفصلة عن تطبيق ERP، تُفتح مباشرة في المتصفح:
