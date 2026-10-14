@@ -15,6 +15,8 @@ import {
   type PayMethod,
   type Unit,
 } from '../lib/types'
+import PhotoStrip from '../components/PhotoStrip'
+import { loadOrderPhotos, trackUrl, type OrderPhoto } from '../lib/orderPhotos'
 import { orderMessage, waLink } from '../lib/whatsapp'
 import { CustomerPaymentModal } from './Customers'
 
@@ -40,6 +42,8 @@ interface Detail {
   notes: string | null
   phone: string | null
   events: EventRow[]
+  token: string | null
+  photos: OrderPhoto[]
 }
 
 interface EventRow {
@@ -77,7 +81,7 @@ export default function Orders() {
   }
 
   async function openDetail(id: number) {
-    const [o, i, p, m, raw, ev] = await Promise.all([
+    const [o, i, p, m, raw, ev, tk, photos] = await Promise.all([
       supabase.from('order_totals').select('*').eq('id', id).single(),
       supabase.from('order_items').select('*').eq('order_id', id).order('id'),
       supabase.from('customer_payments').select('*').eq('order_id', id).order('paid_on'),
@@ -89,6 +93,9 @@ export default function Orders() {
         .order('created_at'),
       supabase.from('orders').select('notes, customers(phone)').eq('id', id).single(),
       supabase.from('order_events').select('id, status, created_at, profiles(full_name)').eq('order_id', id).order('created_at'),
+      // رابط التتبع والصور (المرحلة 10): لا تعطّل التفاصيل إن لم يُشغَّل ملفها بعد
+      supabase.from('orders').select('track_token').eq('id', id).maybeSingle(),
+      loadOrderPhotos([id]).catch(() => [] as OrderPhoto[]),
     ])
     if (o.error) return setError(arabicError(o.error))
     setDetail({
@@ -99,6 +106,8 @@ export default function Orders() {
       notes: (raw.data as unknown as { notes: string | null } | null)?.notes ?? null,
       phone: (raw.data as unknown as { customers: { phone: string | null } | null } | null)?.customers?.phone ?? null,
       events: (ev.data as unknown as EventRow[]) ?? [],
+      token: tk.error ? null : ((tk.data as { track_token: string } | null)?.track_token ?? null),
+      photos,
     })
   }
 
@@ -225,6 +234,7 @@ export default function Orders() {
             onEdit={() => startEdit(detail.o.id)}
             onInvoice={() => navigate(`/invoice/${detail.o.id}`)}
             onDelete={() => remove(detail)}
+            onReload={() => openDetail(detail.o.id)}
           />
         </Modal>
       )}
@@ -232,7 +242,7 @@ export default function Orders() {
   )
 }
 
-function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }: {
+function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, onReload }: {
   d: Detail
   today: string
   onStatus: (s: OrderStatus) => void
@@ -240,12 +250,19 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }:
   onEdit: () => void
   onInvoice: () => void
   onDelete: () => void
+  onReload: () => void
 }) {
   const { o } = d
+  const [copied, setCopied] = useState(false)
+  const link = d.token ? trackUrl(d.token) : null
+  async function copyLink() {
+    if (!link) return
+    try { await navigator.clipboard.writeText(link); setCopied(true) } catch { setCopied(false) }
+  }
   const subtotal = d.items.reduce((a, i) => a + Number(i.qty) * Number(i.unit_price), 0)
   const profit = Number(o.total) - Number(o.material_cost)
   const canDelete = !d.payments.length && !d.moves.length
-  const wa = waLink(d.phone, orderMessage(o, rest(o)))
+  const wa = waLink(d.phone, orderMessage(o, rest(o), link))
 
   return (
     <div className="form">
@@ -293,6 +310,20 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete }:
         <div className="stat"><span>الربح التقريبي</span><strong className={profit < 0 ? 'neg' : 'pos'}>{dzd(profit)}</strong></div>
       </div>
       <p className="muted">الربح = الصافي ناقص تكلفة المواد التي أُخرجت لهذه الطلبية. لا يشمل أجور العمال والمصاريف الأخرى.</p>
+
+      <h4>الصور (التصميم، المقاسات، القطعة الجاهزة)</h4>
+      <PhotoStrip orderId={o.id} photos={d.photos} canAdd canDelete={() => true} onChanged={onReload} />
+
+      {link && (
+        <>
+          <h4>رابط التتبع للزبون</h4>
+          <p className="muted" style={{ margin: 0 }}>يرى الزبون بهذا الرابط حالة طلبيته وموعد التسليم والباقي، بدون حساب. يُرسل تلقائيًا مع رسالة واتساب.</p>
+          <div className="toolbar" style={{ marginTop: 8 }}>
+            <button type="button" className="secondary" onClick={copyLink}>{copied ? 'تم النسخ ✓' : 'نسخ الرابط'}</button>
+            <a className="btn secondary-link" href={link} target="_blank" rel="noopener">فتح صفحة الزبون</a>
+          </div>
+        </>
+      )}
 
       <h4>الدفعات</h4>
       <ul className="list">

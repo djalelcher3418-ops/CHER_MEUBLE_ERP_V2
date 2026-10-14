@@ -330,6 +330,41 @@ ok((await q(`delete from storage.objects where name = '1/team-by-admin.jpg' retu
 await as(ADMIN)
 ok((await q(`delete from storage.objects where name = '1/team-by-worker.jpg' returning id`)).length === 1, "the manager can delete a worker's photo")
 
+// --- phase 10: order photos + tracking link
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/010_photos_tracking.sql', 'utf8'))
+console.log('ok   photos and tracking migration ran on existing data')
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 10, 'schema version is 10')
+ok((await q(`select count(*)::int n from orders where track_token is null`))[0].n === 0, 'every existing order got a tracking token')
+await q(`insert into storage.objects (bucket_id, name) values ('orders', '${OPEN}/design.jpg')`)
+await q(`insert into order_photos (order_id, path, caption) values (${OPEN}, '${OPEN}/design.jpg', 'التصميم'), (2, '2/old.jpg', null)`)
+await as(WORKER)
+let wp = await q(`select order_id from order_photos`)
+ok(wp.length === 1 && Number(wp[0].order_id) === OPEN, 'a worker sees photos of open orders only')
+ok((await q(`select * from storage.objects where bucket_id = 'orders'`)).length === 1, 'a worker can open the photo file of an open order')
+await q(`insert into storage.objects (bucket_id, name) values ('orders', '${OPEN}/done.jpg')`)
+await q(`insert into order_photos (order_id, path) values (${OPEN}, '${OPEN}/done.jpg')`)
+ok(true, 'a worker can add a photo of the finished piece')
+let closedPhoto = false; try { await q(`insert into storage.objects (bucket_id, name) values ('orders', '2/x.jpg')`) } catch { closedPhoto = true }
+ok(closedPhoto, 'a worker cannot upload to a delivered order')
+ok((await q(`delete from order_photos where path = '${OPEN}/design.jpg' returning id`)).length === 0, "a worker cannot delete the manager's photo")
+ok((await q(`delete from order_photos where path = '${OPEN}/done.jpg' returning id`)).length === 1, 'a worker can delete their own photo')
+let peek = false; try { await q(`select track_token from orders`) } catch { peek = true }
+ok(peek || (await q(`select track_token from orders`)).length === 0, 'a worker cannot read tracking tokens')
+await as(STRANGER)
+ok((await q(`select * from order_photos`)).length === 0, 'an inactive account sees no photos')
+
+await as(ADMIN)
+const token = (await q(`select track_token from orders where id = ${newId}`))[0].track_token
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+const tr = (await q(`select track_order('${token}') as t`))[0].t
+ok(tr && tr.id == newId && tr.title === 'طاولة كبيرة' && Number(tr.total) === 25000 && tr.items.length === 1, `a customer opens the tracking link without an account (${tr?.title}, ${tr?.status})`)
+ok(tr.customer === 'زبون' && !('phone' in tr), 'the tracking page shows only the first name, no phone')
+ok((await q(`select track_order('00000000-0000-0000-0000-000000000000') as t`))[0].t === null, 'a wrong link shows nothing')
+let anonPhotos = false; try { await q(`select * from order_photos`) } catch { anonPhotos = true }
+ok(anonPhotos || (await q(`select * from order_photos`)).length === 0, 'a visitor without account sees no photos')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

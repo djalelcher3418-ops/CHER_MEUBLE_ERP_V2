@@ -12,6 +12,7 @@ import Login from './pages/Login'
 // كل صفحة تُحمَّل عند فتحها فقط، فيفتح التطبيق أسرع على الهاتف
 const Accounts = lazy(() => import('./pages/Accounts'))
 const Status = lazy(() => import('./pages/Status'))
+const Track = lazy(() => import('./pages/Track'))
 const Chat = lazy(() => import('./pages/Chat'))
 const Customers = lazy(() => import('./pages/Customers'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -90,6 +91,16 @@ export default function App() {
           </p>
         </div>
       </div>
+    )
+
+  // صفحة تتبع الطلبية للزبون: عامة، بدون دخول
+  if (location.pathname.startsWith('/track/'))
+    return (
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route path="/track/:token" element={<Track />} />
+        </Routes>
+      </Suspense>
     )
 
   if (loading) return <div className="center-page"><div className="login-logo">CM</div></div>

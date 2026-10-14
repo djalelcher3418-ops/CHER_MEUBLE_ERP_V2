@@ -80,12 +80,14 @@ http.createServer(async (req, res) => {
     if (u.pathname.startsWith('/storage/v1/object/')) {
       const rest = u.pathname.replace('/storage/v1/object/', '')
       if (rest.startsWith('list/')) return send(res, 200, [])
+      // مخازن متعددة (chat و orders): المفتاح = <bucket>/<path>
       if (rest.startsWith('sign/') && req.method === 'POST') {
+        const bucket = rest.split('/')[1]
         const b = JSON.parse((await body(req)).toString())
-        return send(res, 200, (b.paths ?? []).map((p) => ({ path: p, signedURL: `/storage/v1/object/sign/chat/${p}?token=t`, error: null })))
+        return send(res, 200, (b.paths ?? []).map((p) => ({ path: p, signedURL: `/storage/v1/object/sign/${bucket}/${p}?token=t`, error: null })))
       }
-      if (rest.startsWith('sign/') && req.method === 'GET') { const f = files.get(rest.replace(/^sign\/chat\//, '')); res.writeHead(f ? 200 : 404, { 'content-type': 'image/jpeg' }); return res.end(f ?? '') }
-      if (req.method === 'POST') { const key = rest.replace(/^chat\//, ''); files.set(key, await body(req)); return send(res, 200, { Key: 'chat/' + key }) }
+      if (rest.startsWith('sign/') && req.method === 'GET') { const f = files.get(rest.replace(/^sign\//, '')); res.writeHead(f ? 200 : 404, { 'content-type': 'image/jpeg' }); return res.end(f ?? '') }
+      if (req.method === 'POST') { files.set(rest, await body(req)); return send(res, 200, { Key: rest }) }
       if (req.method === 'DELETE') return send(res, 200, [])
     }
     if (u.pathname.startsWith('/realtime/')) { res.writeHead(404); return res.end() }

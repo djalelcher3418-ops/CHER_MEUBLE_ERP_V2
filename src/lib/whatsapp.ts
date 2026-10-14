@@ -11,10 +11,15 @@ export function waLink(phone: string | null | undefined, text: string): string |
 }
 
 /** نص رسالة للزبون حسب حالة الطلبية */
-export function orderMessage(o: { id: number; title: string; customer_name: string; status: OrderStatus; due_date: string | null }, remaining: number): string {
+export function orderMessage(
+  o: { id: number; title: string; customer_name: string; status: OrderStatus; due_date: string | null },
+  remaining: number,
+  trackLink?: string | null,
+): string {
   const rest = remaining > 0 ? `\nالباقي للدفع: ${dzd(remaining)}` : ''
   const head = `السلام عليكم ${o.customer_name}،`
-  const sign = '\n\nCHER MEUBLE'
+  const track = trackLink && o.status !== 'cancelled' ? `\n\nتابعوا طلبيتكم من هنا:\n${trackLink}` : ''
+  const sign = `${track}\n\nCHER MEUBLE`
   switch (o.status) {
     case 'ready':
       return `${head}\nطلبيتكم رقم ${o.id} (${o.title}) جاهزة للاستلام.${rest}${sign}`

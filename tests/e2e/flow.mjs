@@ -123,6 +123,21 @@ await step('order', async () => {
   ok(await p.locator('.modal >> text=واتساب للزبون').count() === 1, 'order details show the WhatsApp button')
   await shot(p, 'order')
 })
+const PNG = { name: 'design.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }
+let trackLink
+await step('order photo + tracking link', async () => {
+  await go(p, '/orders?open=1')
+  const m = modal(p)
+  await m.locator('text=رابط التتبع للزبون').waitFor()
+  await m.locator('input[type=file]').setInputFiles(PNG)
+  await m.locator('.photo img').first().waitFor({ timeout: 10000 })
+  const ph = await one(`select count(*)::int n from order_photos where order_id = 1`)
+  ok(ph.n === 1, 'manager attached a design photo to the order')
+  trackLink = await m.getByRole('link', { name: 'فتح صفحة الزبون' }).getAttribute('href')
+  ok(/\/track\/[0-9a-f-]{36}$/.test(trackLink ?? ''), `order has a customer tracking link (${trackLink})`)
+  const wa = decodeURIComponent((await m.locator('a.wa').getAttribute('href')) ?? '')
+  ok(wa.includes('/track/'), 'the WhatsApp message includes the tracking link')
+})
 await step('workshop start', async () => {
   await go(p, '/workshop')
   await p.getByRole('button', { name: 'بدأنا العمل' }).click()
@@ -208,6 +223,15 @@ await step('worker takes material for the order', async () => {
   ok(mv && Number(mv.qty) === 3 && Number(mv.order_id) === 1 && mv.full_name === 'كريم', 'worker took 3 sheets, recorded against order 1')
   ok(Number((await one(`select qty from materials limit 1`)).qty) === 7, 'stock went from 10 to 7')
 })
+await step('worker sees and adds photos', async () => {
+  await go(p, '/workshop')
+  await p.locator('.job .photo img').first().waitFor({ timeout: 10000 })
+  ok(true, "worker sees the design photo on the workshop card")
+  await p.locator('.job input[type=file]').first().setInputFiles({ ...PNG, name: 'done.png' })
+  await p.waitForTimeout(1500)
+  const r = await one(`select count(*)::int n from order_photos ph join profiles pr on pr.id = ph.created_by where pr.full_name = 'كريم'`)
+  ok(r.n === 1, 'worker added a photo of the piece')
+})
 await step('worker marks ready', async () => {
   await go(p, '/workshop')
   await p.getByRole('button', { name: '✓ الطلبية جاهزة' }).click(); await p.waitForTimeout(1000)
@@ -256,6 +280,18 @@ await step('admin closes the order', async () => {
   ok(t.status === 'delivered' && !!t.delivered_on && Number(t.paid) === 150000, `order delivered and fully paid (${t.paid}/${t.total})`)
   ok(Number((await one(`select balance from customer_balances`)).balance) === 0, 'customer balance is now 0')
   await shot(p, 'order-closed')
+})
+await step('customer tracking page', async () => {
+  const guest = await newPage() // بدون أي حساب
+  await guest.goto(trackLink); await guest.waitForLoadState('networkidle')
+  await guest.locator('text=غرفة نوم كاملة').waitFor({ timeout: 10000 })
+  const txt = await guest.locator('body').innerText()
+  ok(txt.includes('تم التسليم') && txt.includes('سمير') && !txt.includes('0555123456'), 'customer opens the link without an account: delivered, first name only, no phone')
+  ok(await guest.locator('.tabbar').count() === 0, 'the tracking page shows nothing of the app itself')
+  await shot(guest, 'tracking')
+  await guest.goto('http://localhost:4174/track/00000000-0000-0000-0000-000000000000'); await guest.waitForLoadState('networkidle')
+  ok(await guest.locator('text=الرابط غير صحيح').count() === 1, 'a wrong tracking link shows an error page')
+  await guest.context().close()
 })
 await step('invoice', async () => {
   await go(p, '/invoice/1')

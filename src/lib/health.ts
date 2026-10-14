@@ -25,6 +25,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p9', label: 'إصلاحات الأمان والدقة', fix: 'شغّل supabase/009_hardening.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 9,
   },
+  {
+    key: 'p10', label: 'صور الطلبيات ورابط التتبع', fix: 'شغّل supabase/010_photos_tracking.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 10,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */

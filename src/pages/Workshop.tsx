@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import PhotoStrip from '../components/PhotoStrip'
+import { useAuth } from '../lib/auth'
+import { loadOrderPhotos, type OrderPhoto } from '../lib/orderPhotos'
 import { sendPush } from '../lib/push'
 import { arabicError, num, supabase, todayISO } from '../lib/supabase'
 import { ORDER_STATUS_LABELS, type OrderPublic, type OrderStatus } from '../lib/types'
@@ -19,6 +22,8 @@ interface JobItem {
 export default function Workshop() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [items, setItems] = useState<JobItem[]>([])
+  const [photos, setPhotos] = useState<OrderPhoto[]>([])
+  const { session, isAdmin } = useAuth()
   const [busy, setBusy] = useState<number | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
@@ -32,9 +37,12 @@ export default function Workshop() {
     ])
     const err = o.error ?? i.error
     if (err) setError(arabicError(err))
-    setJobs((o.data as Job[]) ?? [])
+    const list = (o.data as Job[]) ?? []
+    setJobs(list)
     setItems((i.data as JobItem[]) ?? [])
     setLoaded(true)
+    // الصور تُحمَّل بعد البطاقات، ولا تمنع ظهورها إن لم يُشغَّل ملف الصور بعد
+    loadOrderPhotos(list.map((j) => j.id)).then(setPhotos, () => setPhotos([]))
   }
   useEffect(() => {
     load()
@@ -80,6 +88,13 @@ export default function Workshop() {
                 </ul>
               )}
               {j.notes && <div className="notes">{j.notes}</div>}
+              <PhotoStrip
+                orderId={j.id}
+                photos={photos.filter((p) => p.order_id === j.id)}
+                canAdd
+                canDelete={(p) => isAdmin || p.created_by === session?.user.id}
+                onChanged={load}
+              />
               <div className="toolbar">
                 {j.status === 'new' && (
                   <button disabled={busy === j.id} onClick={() => advance(j, 'in_production')}>بدأنا العمل</button>
