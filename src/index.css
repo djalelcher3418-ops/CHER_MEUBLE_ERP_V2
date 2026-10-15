@@ -523,3 +523,28 @@ a.btn.secondary-link { background: var(--brand-soft); color: var(--brand); }
 .math-choices button { min-height: 72px; font-size: 26px; font-weight: 800; background: var(--surface); color: var(--text); border: 2px solid var(--line); }
 .math-choices button.right { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 .math-choices button.wrong { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+
+/* ---------- تتريس ---------- */
+.tetris { gap: 10px; user-select: none; -webkit-user-select: none; }
+.tetris-main { display: flex; gap: 10px; justify-content: center; align-items: flex-start; }
+.tetris-board {
+  position: relative; display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(20, 1fr);
+  width: min(66vw, 46vh, 300px); aspect-ratio: 1 / 2; gap: 1px; padding: 3px;
+  background: #1d1410; border-radius: 12px; box-shadow: var(--shadow); touch-action: none;
+}
+.tetris-board i { border-radius: 3px; background: rgba(255, 255, 255, .04); }
+.tetris-board i.ghost { opacity: .28; }
+.tetris-board i.flash { background: #fff !important; }
+.tetris-side { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 64px; }
+.tetris-next { display: grid; gap: 2px; width: 56px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.tetris-next i { aspect-ratio: 1; border-radius: 2px; }
+/* ألوان القطع: درجات الخشب والقماش */
+.t1 { background: #3fa7c4 !important; } .t2 { background: #e8b84a !important; } .t3 { background: #9a5fc0 !important; }
+.t4 { background: #5aa86a !important; } .t5 { background: #d0573f !important; } .t6 { background: #4a6fc9 !important; }
+.t7 { background: #c98a3c !important; }
+.tetris-board i[class^='t'], .tetris-board i[class*=' t'] { box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .22), inset 0 2px 0 rgba(255, 255, 255, .25); }
+.tetris-over { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: rgba(20, 12, 8, .72); color: #fff; border-radius: 12px; font-size: 20px; }
+.tetris-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tetris-pad button { min-height: 58px; font-size: 24px; background: var(--brand-soft); color: var(--brand); touch-action: manipulation; }
+.tetris-pad button.drop { grid-column: 1 / -1; min-height: 50px; font-size: 18px; background: var(--brand); color: var(--brand-ink); }
+.tetris-help { font-size: 13px; margin: 0; }

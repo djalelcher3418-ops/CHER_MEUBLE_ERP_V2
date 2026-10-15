@@ -340,6 +340,26 @@ await step('worker plays a game', async () => {
   ok(true, 'the weekly leaderboard shows the worker')
   await shot(p, 'games')
 })
+await step('worker plays Tetris', async () => {
+  await go(p, '/games')
+  await p.locator('.game-card', { hasText: 'تتريس' }).getByRole('button', { name: 'العب الآن' }).click()
+  ok(await p.locator('.tetris-board i').count() === 200, 'Tetris shows a 10×20 board')
+  await p.getByRole('button', { name: 'يسار' }).click()
+  await p.getByRole('button', { name: 'تدوير' }).click()
+  await p.getByRole('button', { name: 'نزول' }).click()
+  await shot(p, 'tetris')
+  // نُسقط القطع واحدة فوق الأخرى حتى تمتلئ اللوحة وتنتهي اللعبة
+  for (let i = 0; i < 60 && !(await p.locator('.tetris-over').count()); i++) {
+    await p.getByRole('button', { name: 'إسقاط', exact: true }).click()
+    await p.waitForTimeout(60)
+  }
+  await p.locator('.tetris-over', { hasText: 'انتهت اللعبة' }).waitFor({ timeout: 8000 })
+  await p.locator('.result h2').waitFor({ timeout: 8000 })
+  const g = await one(`select game, score from game_scores order by id desc limit 1`)
+  ok(g?.game === 'tetris' && g.score > 0, `worker played Tetris until the board filled up (${g?.score} points saved)`)
+  await p.locator('.game-card', { hasText: 'تتريس' }).locator('.ranks li', { hasText: 'كريم' }).waitFor({ timeout: 8000 })
+  ok(true, 'Tetris has its own leaderboard')
+})
 await step('my pay', async () => {
   await go(p, '/pay')
   await p.locator('text=دُفع الراتب').waitFor({ timeout: 8000 })
@@ -408,7 +428,7 @@ await step('manager sees the team', async () => {
   await go(p, '/team')
   await p.locator('.kudos-banner', { hasText: 'كريم' }).waitFor({ timeout: 8000 })
   ok(await p.locator('.post', { hasText: 'صباح الخير يا أبطال' }).locator('text=1 تعليق').count() === 1, 'manager sees the thanks card and the comment count')
-  ok(await p.locator('.post-game').count() === 1, "manager sees the worker's game trophy")
+  ok(await p.locator('.post-game').count() === 2, "manager sees the worker's two game trophies (arithmetic and Tetris)")
 })
 await step('stop account', async () => {
   await go(p, '/accounts')

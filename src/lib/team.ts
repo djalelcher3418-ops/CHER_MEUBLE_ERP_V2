@@ -38,7 +38,7 @@ export interface Ranking {
   plays: number
 }
 
-export type GameId = 'memory' | 'math'
+export type GameId = 'memory' | 'math' | 'tetris'
 
 export const REACTIONS = ['❤️', '👏', '😂', '🔥'] as const
 

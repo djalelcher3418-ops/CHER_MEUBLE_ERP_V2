@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import TeamNav from '../components/TeamNav'
+import TetrisGame from './Tetris'
 import { useAuth } from '../lib/auth'
 import { arabicError, supabase } from '../lib/supabase'
 import { avatarStyle, initial, type GameId, type Ranking } from '../lib/team'
 
 const GAMES: { id: GameId; title: string; emoji: string; text: string }[] = [
+  { id: 'tetris', title: 'تتريس', emoji: '🧱', text: 'رتّب القطع المتساقطة وأكمل الأسطر. كل 10 أسطر يزيد المستوى وتتسارع القطع.' },
   { id: 'memory', title: 'لعبة الذاكرة', emoji: '🧠', text: 'اقلب البطاقات وجد كل زوجين متشابهين بأقل محاولات وأسرع وقت.' },
   { id: 'math', title: 'حساب الورشة', emoji: '📏', text: '10 عمليات حساب بالمقاسات. أجب صحيحًا وبسرعة لتجمع النقاط.' },
 ]
@@ -21,7 +23,9 @@ export default function Games() {
     setPlaying(null)
     const { data, error } = await supabase.rpc('submit_game_score', { p_game: game, p_score: score })
     if (error) {
-      setError(error.message.includes('submit_game_score') ? 'شغّل ملف supabase/014_team_social.sql في Supabase أولًا.' : arabicError(error))
+      setError(error.message.includes('submit_game_score') ? 'شغّل ملف supabase/014_team_social.sql في Supabase أولًا.'
+        : game === 'tetris' && /check|غير صحيحة|غير معروفة/.test(error.message) ? 'شغّل ملف supabase/015_tetris.sql في Supabase أولًا لحفظ نتائج تتريس.'
+        : arabicError(error))
       setResult({ game, score, top: false, best: score })
     } else {
       setError('')
@@ -33,6 +37,7 @@ export default function Games() {
 
   if (playing === 'memory') return <MemoryGame onDone={(s) => finished('memory', s)} onQuit={() => setPlaying(null)} />
   if (playing === 'math') return <MathGame onDone={(s) => finished('math', s)} onQuit={() => setPlaying(null)} />
+  if (playing === 'tetris') return <TetrisGame onDone={(s) => finished('tetris', s)} onQuit={() => setPlaying(null)} />
 
   return (
     <div className="team-page">

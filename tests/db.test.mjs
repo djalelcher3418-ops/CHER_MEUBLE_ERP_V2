@@ -544,6 +544,24 @@ ok(foreignUpload, 'nobody can upload into a colleague’s photo folder')
 await q(`insert into storage.objects (bucket_id, name) values ('team', '${INVITED}/c.jpg')`)
 ok((await db.query(`delete from storage.objects where bucket_id = 'team' and name like '${WORKER}/%'`)).affectedRows === 0, 'a worker cannot delete a colleague’s photo')
 
+// --- phase 15: tetris
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/015_tetris.sql', 'utf8'))
+await db.exec(fs.readFileSync(R + '/supabase/015_tetris.sql', 'utf8'))
+let old014 = ''; try { await db.exec(fs.readFileSync(R + '/supabase/014_team_social.sql', 'utf8')) } catch (e) { old014 = e.message }
+ok(old014.includes('شُغّل من قبل'), 'running the older 014 again after 015 is refused')
+await as(WORKER)
+ok((await q(`select erp_schema_version() as v`))[0].v === 15, 'schema version is 15')
+ok((await q(`select count(*)::int n from game_scores`))[0].n >= 4, 'earlier game scores survive the migration')
+const t1 = (await q(`select submit_game_score('tetris', 12400) as r`))[0].r
+ok(t1.top === true && t1.best === 12400, 'a Tetris score above 1000 is accepted and tops the week')
+ok((await q(`select body from team_posts where kind = 'game' order by id desc limit 1`))[0].body.includes('تتريس'), 'the trophy post names Tetris')
+let bigMemory = false; try { await q(`select submit_game_score('memory', 1001)`) } catch { bigMemory = true }
+ok(bigMemory, 'the other games still stop at 1000')
+let bigTetris = false; try { await q(`select submit_game_score('tetris', 200001)`) } catch { bigTetris = true }
+ok(bigTetris, 'an impossible Tetris score is refused')
+ok((await q(`select * from game_leaderboard('tetris')`))[0].best === 12400, 'Tetris has its own leaderboard')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

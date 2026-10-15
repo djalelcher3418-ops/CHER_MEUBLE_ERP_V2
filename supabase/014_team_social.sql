@@ -9,6 +9,9 @@ do $$ begin
   if erp_schema_version() < 13 then
     raise exception 'شغّل الملف 013_fabric_legs.sql أولًا ثم أعد تشغيل هذا الملف';
   end if;
+  if erp_schema_version() > 14 then
+    raise exception 'هذا الملف شُغّل من قبل وقاعدة البيانات أحدث منه — لا حاجة لتشغيله';
+  end if;
 end $$;
 
 -- ---------- 1) المنشورات ----------
