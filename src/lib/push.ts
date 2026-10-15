@@ -75,6 +75,6 @@ export async function forgetPush() {
 }
 
 /** يطلب من الخادم إرسال التنبيه (لا ننتظر النتيجة) */
-export function sendPush(body: { message_id: number } | { order_id: number }) {
+export function sendPush(body: { message_id: number } | { order_id: number } | { post_id: number } | { comment_id: number }) {
   supabase.functions.invoke('send-push', { body }).then(() => {}, () => {})
 }

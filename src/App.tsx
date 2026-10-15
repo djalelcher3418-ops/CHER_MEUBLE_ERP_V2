@@ -6,7 +6,7 @@ import { useAuth } from './lib/auth'
 import { enablePush, forgetPush } from './lib/push'
 import { arabicError, configMissing, supabase } from './lib/supabase'
 import { useTableLabels } from './lib/useTableLabels'
-import { useUnread } from './lib/useUnread'
+import { UnreadContext, useUnread } from './lib/useUnread'
 import Login from './pages/Login'
 
 // كل صفحة تُحمَّل عند فتحها فقط، فيفتح التطبيق أسرع على الهاتف
@@ -18,6 +18,7 @@ const Customers = lazy(() => import('./pages/Customers'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Employees = lazy(() => import('./pages/Employees'))
 const Expenses = lazy(() => import('./pages/Expenses'))
+const Games = lazy(() => import('./pages/Games'))
 const Invoice = lazy(() => import('./pages/Invoice'))
 const Materials = lazy(() => import('./pages/Materials'))
 const Messages = lazy(() => import('./pages/Messages'))
@@ -27,6 +28,7 @@ const Purchases = lazy(() => import('./pages/Purchases'))
 const Reports = lazy(() => import('./pages/Reports'))
 const ScanOut = lazy(() => import('./pages/ScanOut'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
+const Team = lazy(() => import('./pages/Team'))
 const Workshop = lazy(() => import('./pages/Workshop'))
 
 type Tab = { to: string; label: string; icon: IconName; end?: boolean; external?: boolean }
@@ -35,7 +37,7 @@ const ADMIN_TABS: Tab[] = [
   { to: '/', label: 'الرئيسية', icon: 'home', end: true },
   { to: '/orders', label: 'الطلبيات', icon: 'orders' },
   { to: '/workshop', label: 'الورشة', icon: 'workshop' },
-  { to: '/messages', label: 'الرسائل', icon: 'chat' },
+  { to: '/team', label: 'الفريق', icon: 'team' },
 ]
 const ADMIN_MORE: Tab[] = [
   { to: '/customers', label: 'الزبائن', icon: 'customers' },
@@ -53,11 +55,15 @@ const ADMIN_MORE: Tab[] = [
 const WORKER_TABS: Tab[] = [
   { to: '/workshop', label: 'الورشة', icon: 'workshop' },
   { to: '/scan', label: 'إخراج مواد', icon: 'scan' },
-  { to: '/messages', label: 'الرسائل', icon: 'chat' },
+  { to: '/team', label: 'الفريق', icon: 'team' },
   { to: '/pay', label: 'راتبي', icon: 'pay' },
 ]
 
 const Loading = () => <p className="muted center">جارٍ التحميل…</p>
+
+// صفحات «الفريق» الثلاث تحت تبويب واحد في الشريط السفلي
+const TEAM_PATHS = ['/team', '/messages', '/games']
+const inTeam = (path: string) => TEAM_PATHS.some((p) => path === p || path.startsWith(p + '/'))
 
 export default function App() {
   const { session, profile, loading, isAdmin, signOut } = useAuth()
@@ -66,6 +72,7 @@ export default function App() {
   const [account, setAccount] = useState(false)
   const [main, setMain] = useState<HTMLElement | null>(null)
   const unread = useUnread(session && profile?.active ? session.user.id : undefined)
+  const teamBadge = unread.chat + unread.feed
   useTableLabels(main)
 
   // إن سبق السماح بالتنبيهات على هذا الهاتف، نجدّد تسجيله بصمت عند الدخول
@@ -129,6 +136,7 @@ export default function App() {
   const inMore = isAdmin && ADMIN_MORE.some((t) => location.pathname.startsWith(t.to))
 
   return (
+    <UnreadContext.Provider value={unread}>
     <div className="shell">
       <header className="appbar">
         <div className="logo">CM</div>
@@ -158,6 +166,8 @@ export default function App() {
                 <Route path="/status" element={<Status />} />
                 <Route path="/workshop" element={<Workshop />} />
                 <Route path="/messages" element={<Messages />} />
+                <Route path="/team" element={<Team />} />
+                <Route path="/games" element={<Games />} />
                 <Route path="/scan" element={<ScanOut />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>
@@ -166,6 +176,8 @@ export default function App() {
                 <Route path="/workshop" element={<Workshop />} />
                 <Route path="/scan" element={<ScanOut />} />
                 <Route path="/messages" element={<Messages />} />
+                <Route path="/team" element={<Team />} />
+                <Route path="/games" element={<Games />} />
                 <Route path="/pay" element={<MyPay />} />
                 <Route path="*" element={<Navigate to="/workshop" replace />} />
               </>
@@ -176,10 +188,11 @@ export default function App() {
 
       <nav className="tabbar no-print" aria-label="القائمة">
         {tabs.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <NavLink key={t.to} to={t.to} end={t.end}
+            className={({ isActive }) => `tab${isActive || (t.to === '/team' && inTeam(location.pathname)) ? ' active' : ''}`}>
             <Icon name={t.icon} />
             {t.label}
-            {t.to === '/messages' && unread > 0 && <i className="dot">{unread > 99 ? '99+' : unread}</i>}
+            {t.to === '/team' && teamBadge > 0 && <i className="dot">{teamBadge > 99 ? '99+' : teamBadge}</i>}
           </NavLink>
         ))}
         {isAdmin && (
@@ -210,6 +223,7 @@ export default function App() {
         </Modal>
       )}
     </div>
+    </UnreadContext.Provider>
   )
 }
 

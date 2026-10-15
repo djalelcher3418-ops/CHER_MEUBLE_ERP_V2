@@ -8,6 +8,9 @@ do $$ begin
   if erp_schema_version() < 12 then
     raise exception 'شغّل الملف 012_bed_size.sql أولًا ثم أعد تشغيل هذا الملف';
   end if;
+  if erp_schema_version() > 13 then
+    raise exception 'هذا الملف شُغّل من قبل وقاعدة البيانات أحدث منه — لا حاجة لتشغيله';
+  end if;
 end $$;
 
 alter table order_items add column if not exists fabric text check (fabric is null or length(fabric) <= 60);

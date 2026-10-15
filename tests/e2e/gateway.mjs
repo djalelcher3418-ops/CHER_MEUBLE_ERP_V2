@@ -11,6 +11,22 @@ export const sign = (claims) => { const h = b64({ alg: 'HS256', typ: 'JWT' }), p
 const verify = (t) => { try { const [h, p, s] = t.split('.'); if (crypto.createHmac('sha256', SECRET).update(`${h}.${p}`).digest('base64url') !== s) return null; return JSON.parse(Buffer.from(p, 'base64url')) } catch { return null } }
 const db = new pg.Pool({ host: process.argv[3], port: 5433, user: 'postgres', database: 'erp' })
 const files = new Map() // storage: path -> Buffer
+// supabase-js يرفع الصور كـ multipart/form-data: نحفظ جزء الملف فقط حتى تظهر الصورة فعلًا
+function filePart(buf, type = '') {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(type)
+  if (!m) return buf
+  const sep = Buffer.from('--' + (m[1] ?? m[2]))
+  let at = buf.indexOf(sep)
+  while (at !== -1) {
+    const next = buf.indexOf(sep, at + sep.length)
+    if (next === -1) break
+    const part = buf.subarray(at + sep.length + 2, next - 2) // بدون \r\n في البداية والنهاية
+    const head = part.indexOf('\r\n\r\n')
+    if (head !== -1 && /filename=|content-type:\s*image/i.test(part.subarray(0, head).toString())) return part.subarray(head + 4)
+    at = next
+  }
+  return buf
+}
 const FN = { 'send-push': 8010, 'manage-users': 8011 }
 const log = fs.createWriteStream(process.argv[4] ?? 'gateway.log', { flags: 'a' })
 
@@ -84,10 +100,10 @@ http.createServer(async (req, res) => {
       if (rest.startsWith('sign/') && req.method === 'POST') {
         const bucket = rest.split('/')[1]
         const b = JSON.parse((await body(req)).toString())
-        return send(res, 200, (b.paths ?? []).map((p) => ({ path: p, signedURL: `/storage/v1/object/sign/${bucket}/${p}?token=t`, error: null })))
+        return send(res, 200, (b.paths ?? []).map((p) => ({ path: p, signedURL: `/object/sign/${bucket}/${p}?token=t` /* مثل Supabase: المسار بعد /storage/v1 */, error: null })))
       }
       if (rest.startsWith('sign/') && req.method === 'GET') { const f = files.get(rest.replace(/^sign\//, '')); res.writeHead(f ? 200 : 404, { 'content-type': 'image/jpeg' }); return res.end(f ?? '') }
-      if (req.method === 'POST') { files.set(rest, await body(req)); return send(res, 200, { Key: rest }) }
+      if (req.method === 'POST') { files.set(rest, filePart(await body(req), req.headers['content-type'])); return send(res, 200, { Key: rest }) }
       if (req.method === 'DELETE') return send(res, 200, [])
     }
     if (u.pathname.startsWith('/realtime/')) { res.writeHead(404); return res.end() }

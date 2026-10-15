@@ -41,6 +41,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p13', label: 'نوع القماش والأرجل', fix: 'شغّل supabase/013_fabric_legs.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 13,
   },
+  {
+    key: 'p14', label: 'صفحة الفريق والألعاب', fix: 'شغّل supabase/014_team_social.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 14,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */

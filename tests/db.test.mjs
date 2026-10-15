@@ -464,6 +464,86 @@ await db.exec(fs.readFileSync(R + '/supabase/013_fabric_legs.sql', 'utf8'))
 const rerun = await q(`select erp_schema_version() as v, (select fabric from order_items where order_id = ${SOFA}) as f`)
 ok(rerun[0].v === 13 && rerun[0].f === 'شنيل', 'running 013 a second time by mistake is harmless')
 
+// --- phase 14: team page (posts, kudos, comments, games)
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/014_team_social.sql', 'utf8'))
+await db.exec(fs.readFileSync(R + '/supabase/014_team_social.sql', 'utf8'))
+console.log('ok   team migration ran (twice, harmlessly)')
+let old013 = ''; try { await db.exec(fs.readFileSync(R + '/supabase/013_fabric_legs.sql', 'utf8')) } catch (e) { old013 = e.message }
+ok(old013.includes('شُغّل من قبل'), 'running the older 013 again after 014 is refused')
+await as(WORKER)
+ok((await q(`select erp_schema_version() as v`))[0].v === 14, 'schema version is 14')
+const [tp] = await q(`insert into team_posts (body, author_id, author_name) values ('صباح الخير يا جماعة', '${ADMIN}', 'مزوّر') returning *`)
+ok(tp.author_id === WORKER && tp.author_name === 'عامل', 'a post is signed with the real author, a forged name is ignored')
+let gamePost = false; try { await q(`insert into team_posts (kind, body) values ('game', '🏆 مزيف')`) } catch { gamePost = true }
+ok(gamePost, 'nobody can fake a game trophy post')
+let selfThanks = false; try { await q(`insert into team_posts (kind, body, kudos_to) values ('kudos', 'شكرًا لي', '${WORKER}')`) } catch (e) { selfThanks = e.message.includes('نفسك') }
+ok(selfThanks, 'you cannot thank yourself')
+const [kd] = await q(`insert into team_posts (kind, body, kudos_to) values ('kudos', 'ساعدني في تركيب الخزانة', '${INVITED}') returning *`)
+ok(kd.kudos_name === 'مدعو', 'thanking a colleague stores their name')
+let thankInactive = false; try { await q(`insert into team_posts (kind, body, kudos_to) values ('kudos', 'x', '${STRANGER}')`) } catch { thankInactive = true }
+ok(thankInactive, 'you cannot thank an inactive account')
+const mates = await q(`select * from team_members()`)
+ok(mates.length >= 3 && mates.every((m) => Object.keys(m).join() === 'id,full_name,role') && !mates.some((m) => m.id === STRANGER), 'team members list shows only active names, nothing else')
+
+await as(INVITED)
+ok((await q(`select feed_unread() as n`))[0].n === 2, 'a colleague sees 2 new posts')
+await q(`insert into team_post_reactions (post_id, emoji) values (${tp.id}, '❤️'), (${tp.id}, '👏'), (${kd.id}, '❤️')`)
+let badEmoji = false; try { await q(`insert into team_post_reactions (post_id, emoji) values (${tp.id}, '💩')`) } catch { badEmoji = true }
+ok(badEmoji, 'only the four reactions are allowed')
+let twice = false; try { await q(`insert into team_post_reactions (post_id, emoji) values (${tp.id}, '❤️')`) } catch { twice = true }
+ok(twice, 'the same reaction counts once per person')
+await q(`insert into team_post_comments (post_id, body) values (${kd.id}, 'العفو يا خويا 🤝')`)
+await q(`select mark_feed_seen()`)
+ok((await q(`select feed_unread() as n`))[0].n === 0, 'after opening the feed nothing is new')
+const feed = await q(`select * from team_feed(null, 10)`)
+const fk = feed.find((p) => p.id === kd.id), fw = feed.find((p) => p.id === tp.id)
+ok(feed[0].id === kd.id && fk.comments === 1 && fk.reactions['❤️'] === 1 && fw.reactions['👏'] === 1 && fw.my_reactions.length === 2, 'the feed shows newest first with reaction and comment counts')
+ok((await q(`select * from team_feed(${kd.id}, 10)`)).every((p) => p.id < kd.id), 'older posts load page by page')
+let delOther = 0; try { delOther = (await db.query(`delete from team_posts where id = ${tp.id}`)).affectedRows } catch { /* */ }
+ok(delOther === 0, 'a worker cannot delete a colleague’s post')
+await q(`delete from team_post_reactions where post_id = ${tp.id} and emoji = '👏'`)
+ok((await q(`select count(*)::int n from team_post_reactions where post_id = ${tp.id}`))[0].n === 1, 'a reaction can be taken back')
+
+// الألعاب
+const s1 = (await q(`select submit_game_score('memory', 700) as r`))[0].r
+ok(s1.top === true && s1.best === 700, 'first score of the week is the top')
+ok((await q(`select count(*)::int n from team_posts where kind = 'game'`))[0].n === 1, 'a trophy post appears for the new weekly top')
+await as(WORKER)
+const s2 = (await q(`select submit_game_score('memory', 650) as r`))[0].r
+ok(s2.top === false, 'a lower score does not take the top')
+await q(`select submit_game_score('memory', 820)`)
+await q(`select submit_game_score('memory', 100)`)
+const lb = await q(`select * from game_leaderboard('memory')`)
+ok(lb.length === 2 && lb[0].player_name === 'عامل' && lb[0].best === 820 && lb[0].plays === 3 && lb[1].best === 700, 'the weekly leaderboard keeps each player’s best score')
+ok((await q(`select count(*)::int n from team_posts where kind = 'game'`))[0].n === 2, 'beating the top posts a new trophy')
+let cheat = false; try { await q(`select submit_game_score('memory', 5000)`) } catch { cheat = true }
+ok(cheat, 'an impossible score is refused')
+let directScore = false; try { await q(`insert into game_scores (profile_id, game, score) values ('${WORKER}', 'math', 999)`) } catch { directScore = true }
+ok(directScore, 'scores can only be saved through the game')
+ok((await q(`select * from game_leaderboard('math')`)).length === 0, 'each game has its own leaderboard')
+await as(ADMIN)
+ok((await db.query(`delete from team_posts where id = ${tp.id}`)).affectedRows === 1, 'the manager can remove any post')
+ok((await q(`select count(*)::int n from team_post_reactions where post_id = ${tp.id}`))[0].n === 0, 'its reactions go with it')
+
+await as(STRANGER)
+ok((await q(`select * from team_feed()`)).length === 0 && (await q(`select * from team_members()`)).length === 0, 'an inactive account sees no posts and no names')
+let strangerPost = false; try { await q(`insert into team_posts (body) values ('سبام')`) } catch { strangerPost = true }
+ok(strangerPost, 'an inactive account cannot post')
+let strangerGame = false; try { await q(`select submit_game_score('math', 10)`) } catch { strangerGame = true }
+ok(strangerGame, 'an inactive account cannot play for the leaderboard')
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+let anonFeed = false; try { await q(`select * from team_feed()`) } catch { anonFeed = true }
+ok(anonFeed, 'anonymous visitor cannot read the team feed')
+await db.exec('reset role')
+await db.exec(`insert into storage.objects (bucket_id, name) values ('team', '${WORKER}/a.jpg')`)
+await as(INVITED)
+ok((await q(`select * from storage.objects where bucket_id = 'team'`)).length === 1, 'colleagues can see team photos')
+let foreignUpload = false; try { await q(`insert into storage.objects (bucket_id, name) values ('team', '${WORKER}/b.jpg')`) } catch { foreignUpload = true }
+ok(foreignUpload, 'nobody can upload into a colleague’s photo folder')
+await q(`insert into storage.objects (bucket_id, name) values ('team', '${INVITED}/c.jpg')`)
+ok((await db.query(`delete from storage.objects where bucket_id = 'team' and name like '${WORKER}/%'`)).affectedRows === 0, 'a worker cannot delete a colleague’s photo')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
+import TeamNav from '../components/TeamNav'
 import type { ChatSummary } from '../lib/chat'
 import { enablePush, pushActive, pushSupported, type PushResult } from '../lib/push'
 import { arabicError, supabase, todayISO } from '../lib/supabase'
@@ -55,7 +56,7 @@ export default function Messages() {
 
   return (
     <div>
-      <div className="page-head"><h2>الرسائل</h2></div>
+      <TeamNav />
       {error && <p className="error">{error}</p>}
       {result && <p className={result === 'ok' ? 'success' : 'error'}>{RESULT[result]}</p>}
       {!pushOn && pushSupported() && result !== 'ok' && (

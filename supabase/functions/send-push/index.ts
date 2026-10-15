@@ -8,6 +8,8 @@
 //   { "action": "public-key" }  → المفتاح العام لتسجيل الهاتف
 //   { "message_id": 123 }       → تنبيه برسالة جديدة لأعضاء الدردشة
 //   { "order_id": 45 }          → تنبيه للمدير بأن طلبية بدأت أو أصبحت جاهزة
+//   { "post_id": 7 }            → منشور جديد في صفحة الفريق (أو شكر زميل) لكل الفريق
+//   { "comment_id": 9 }         → تعليق جديد لصاحب المنشور
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.49.4'
 import webpush from 'npm:web-push@3.6.7'
@@ -103,6 +105,39 @@ Deno.serve(async (req) => {
       body: `${o.id} — ${o.title} (${me.full_name})`,
       url: `/orders?open=${o.id}`,
       tag: `order-${o.id}`,
+    }
+  } else if (input.post_id) {
+    const { data: p } = await db
+      .from('team_posts')
+      .select('id, kind, author_id, author_name, body, kudos_to, kudos_name, created_at')
+      .eq('id', input.post_id)
+      .maybeSingle()
+    if (!p || p.author_id !== me.id) return json({ error: 'not your post' }, 403)
+    if (Date.now() - Date.parse(p.created_at) > RECENT_MS) return json({ sent: 0, reason: 'old' })
+    recipients = active.filter((x) => x.id !== me.id).map((x) => x.id)
+    const text = (p.body ?? '').trim()
+    payload = {
+      title: p.kind === 'kudos' ? `🙏 ${p.author_name} يشكر ${p.kudos_name}` : `📣 ${p.author_name} نشر في الفريق`,
+      body: text ? (text.length > 140 ? text.slice(0, 140) + '…' : text) : '📷 صورة',
+      url: '/team',
+      tag: `post-${p.id}`,
+    }
+  } else if (input.comment_id) {
+    const { data: c } = await db
+      .from('team_post_comments')
+      .select('id, author_id, author_name, body, created_at, team_posts(author_id)')
+      .eq('id', input.comment_id)
+      .maybeSingle()
+    const post = (c?.team_posts ?? null) as { author_id: string | null } | null
+    if (!c || c.author_id !== me.id) return json({ error: 'not your comment' }, 403)
+    if (Date.now() - Date.parse(c.created_at) > RECENT_MS) return json({ sent: 0, reason: 'old' })
+    recipients = active.filter((x) => x.id !== me.id && x.id === post?.author_id).map((x) => x.id)
+    const text = c.body.trim()
+    payload = {
+      title: `💬 ${c.author_name} علّق على منشورك`,
+      body: text.length > 140 ? text.slice(0, 140) + '…' : text,
+      url: '/team',
+      tag: `comment-${c.id}`,
     }
   } else {
     return json({ error: 'bad request' }, 400)

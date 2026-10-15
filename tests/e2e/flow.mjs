@@ -25,7 +25,12 @@ async function newPage() {
   return p
 }
 const modal = (p) => p.locator('.modal').last()
-const step = async (name, fn) => { try { await fn() } catch (e) { ok(false, `${name}: ${e.message.split('\n')[0]}`) } }
+const step = async (name, fn) => {
+  try { await fn() } catch (e) {
+    ok(false, `${name}: ${e.message.split('\n')[0]}`)
+    await p?.screenshot({ path: `${OUT}/fail-${name.replace(/\W+/g, '-')}.png` }).catch(() => {})
+  }
+}
 const shot = (p, n) => p.screenshot({ path: `${OUT}/e2e-${n}.png` })
 const go = async (p, path) => { await p.goto('http://localhost:4174' + path); await p.waitForLoadState('networkidle'); await p.waitForTimeout(300) }
 
@@ -212,6 +217,18 @@ await step('team message', async () => {
   const m = await one(`select sender_name, body from messages order by id desc limit 1`)
   ok(m?.body === 'اجتماع غدًا الساعة 8' && m.sender_name === 'جلال', 'manager posted in the team chat')
 })
+await step('team post', async () => {
+  await go(p, '/team')
+  ok(await p.locator('.seg a', { hasText: 'المنشورات' }).count() === 1 && await p.locator('.tab.active', { hasText: 'الفريق' }).count() === 1, 'the team tab opens on the posts page')
+  await p.getByLabel('نص المنشور').fill('صباح الخير يا أبطال 💪 شاهدوا غرفة النوم الجديدة')
+  await p.locator('.composer input[type=file]').setInputFiles({ ...PNG, name: 'room.png' })
+  await p.locator('.composer-img img').waitFor()
+  await p.getByRole('button', { name: 'نشر' }).click()
+  await p.locator('.post', { hasText: 'صباح الخير يا أبطال' }).waitFor({ timeout: 8000 })
+  const tp = await one(`select author_name, image_path from team_posts order by id desc limit 1`)
+  ok(tp?.author_name === 'جلال' && !!tp.image_path, 'manager published a post with a photo')
+  await shot(p, 'team')
+})
 await step('admin logout', async () => { await logout(p); ok(true, 'manager signed out') })
 
 // ================= العامل =================
@@ -227,13 +244,24 @@ await step('worker takes material for the order', async () => {
   await p.getByRole('button', { name: 'إخراج مواد لها' }).click()
   await p.locator('text=المواد ستُسجَّل للطلبية').waitFor()
   const code = (await one(`select barcode from materials limit 1`)).barcode
-  await p.getByPlaceholder('أو اكتب الباركود').fill(code)
+  await p.getByPlaceholder(/أو اكتب الباركود/).fill(code)
   await p.getByRole('button', { name: 'بحث' }).click()
   await p.getByLabel(/الكمية المُخرَجة/).fill('3')
   await p.getByRole('button', { name: 'تأكيد الإخراج' }).click(); await p.waitForTimeout(800)
   const mv = await one(`select m.qty, m.order_id, p.full_name from stock_movements m join profiles p on p.id = m.created_by where m.type = 'out'`)
   ok(mv && Number(mv.qty) === 3 && Number(mv.order_id) === 1 && mv.full_name === 'كريم', 'worker took 3 sheets, recorded against order 1')
   ok(Number((await one(`select qty from materials limit 1`)).qty) === 7, 'stock went from 10 to 7')
+  await p.getByRole('button', { name: /اختيار من المواد الموجودة/ }).click()
+  const m = modal(p)
+  await m.getByLabel('بحث عن مادة').fill('mdf')
+  ok(await m.locator('.pick-item').count() === 1, 'the material list filters by name')
+  await m.getByLabel('بحث عن مادة').fill('شيء غير موجود')
+  ok(await m.locator('text=لا توجد مادة بهذا الاسم').count() === 1, 'an unknown name shows nothing')
+  await m.getByLabel('بحث عن مادة').fill('')
+  await m.locator('.pick-item').first().click()
+  await p.getByLabel(/الكمية المُخرَجة/).fill('1')
+  await p.getByRole('button', { name: 'تأكيد الإخراج' }).click(); await p.waitForTimeout(800)
+  ok(Number((await one(`select qty from materials limit 1`)).qty) === 6, 'worker picked the material from the list (no barcode) and took 1 more')
 })
 await step('worker sees and adds photos', async () => {
   await go(p, '/workshop')
@@ -261,6 +289,56 @@ await step('worker messages', async () => {
   const m = await one(`select c.kind, m.sender_name from messages m join chats c on c.id = m.chat_id order by m.id desc limit 1`)
   ok(m?.kind === 'worker' && m.sender_name === 'كريم', 'worker wrote to the manager privately')
   await shot(p, 'worker-chat')
+})
+await step('worker team page', async () => {
+  await go(p, '/workshop')
+  const dot = p.locator('.tab', { hasText: 'الفريق' }).locator('.dot')
+  await dot.waitFor({ timeout: 8000 }).catch(() => {})
+  ok(await dot.count() === 1, 'the team tab shows a badge for the new post')
+  await go(p, '/team')
+  const post = p.locator('.post', { hasText: 'صباح الخير يا أبطال' })
+  await post.waitFor({ timeout: 8000 })
+  await post.locator('.post-img img').waitFor({ timeout: 8000 })
+  ok(true, "worker sees the manager's post with its photo")
+  await post.getByRole('button', { name: 'تفاعل ❤️' }).click(); await p.waitForTimeout(600)
+  ok((await one(`select count(*)::int n from team_post_reactions r join profiles pr on pr.id = r.profile_id where pr.full_name = 'كريم' and r.emoji = '❤️'`)).n === 1, 'worker liked the post')
+  await post.getByRole('button', { name: /علّق/ }).click()
+  await modal(p).getByLabel('تعليق').fill('تبارك الله، خدمة نقية 👌')
+  await modal(p).getByRole('button', { name: 'إرسال' }).click()
+  await modal(p).locator('text=تبارك الله').waitFor({ timeout: 8000 })
+  ok(true, 'worker commented on the post')
+  await modal(p).getByRole('button', { name: 'إغلاق' }).click()
+  await p.getByRole('button', { name: '🙏 شكر زميل' }).click()
+  await p.getByLabel('الزميل').selectOption({ label: 'جلال (المدير)' })
+  await p.getByLabel('نص المنشور').fill('شكرًا على الشرح اليوم')
+  await p.getByRole('button', { name: 'نشر' }).click()
+  await p.locator('.kudos-banner', { hasText: 'جلال' }).waitFor({ timeout: 8000 })
+  const k = await one(`select kind, author_name, kudos_name from team_posts order by id desc limit 1`)
+  ok(k?.kind === 'kudos' && k.author_name === 'كريم' && k.kudos_name === 'جلال', 'worker thanked the manager with a kudos card')
+  await p.waitForTimeout(800)
+  ok(await p.locator('.seg a', { hasText: 'المنشورات' }).locator('.unread').count() === 0, 'opening the feed clears the new-posts badge')
+})
+await step('worker plays a game', async () => {
+  await go(p, '/games')
+  await p.locator('.game-card', { hasText: 'لعبة الذاكرة' }).getByRole('button', { name: 'العب الآن' }).click()
+  ok(await p.locator('.mcard').count() === 16, 'the memory game deals 16 cards')
+  await p.getByRole('button', { name: '✕ خروج' }).click()
+  await p.locator('.game-card', { hasText: 'حساب الورشة' }).getByRole('button', { name: 'العب الآن' }).click()
+  for (let i = 0; i < 10; i++) {
+    const [a, op, b] = (await p.locator('.math-q').innerText()).trim().split(/\s+/)
+    const x = Number(a), y = Number(b)
+    const ans = op === '+' ? x + y : op === '−' ? x - y : op === '×' ? x * y : x / y
+    await p.locator('.math-choices button', { hasText: new RegExp(`^${ans}$`) }).click()
+    await p.waitForTimeout(400)
+  }
+  await p.locator('.result h2').waitFor({ timeout: 8000 })
+  const g = await one(`select game, score, player_name from game_scores order by id desc limit 1`)
+  ok(g?.game === 'math' && g.score >= 800 && g.player_name === 'كريم', `worker played «حساب الورشة» and all answers were right (${g?.score} points)`)
+  ok(await p.locator('.result.top').count() === 1, 'first of the week: the result says so')
+  ok((await one(`select count(*)::int n from team_posts where kind = 'game'`)).n === 1, 'a trophy post went to the team feed')
+  await p.locator('.game-card', { hasText: 'حساب الورشة' }).locator('.ranks li', { hasText: 'كريم' }).waitFor({ timeout: 8000 })
+  ok(true, 'the weekly leaderboard shows the worker')
+  await shot(p, 'games')
 })
 await step('my pay', async () => {
   await go(p, '/pay')
@@ -325,6 +403,12 @@ await step('dashboard', async () => {
   await go(p, '/'); await p.waitForTimeout(800)
   await shot(p, 'dashboard')
   ok(true, 'dashboard renders')
+})
+await step('manager sees the team', async () => {
+  await go(p, '/team')
+  await p.locator('.kudos-banner', { hasText: 'كريم' }).waitFor({ timeout: 8000 })
+  ok(await p.locator('.post', { hasText: 'صباح الخير يا أبطال' }).locator('text=1 تعليق').count() === 1, 'manager sees the thanks card and the comment count')
+  ok(await p.locator('.post-game').count() === 1, "manager sees the worker's game trophy")
 })
 await step('stop account', async () => {
   await go(p, '/accounts')

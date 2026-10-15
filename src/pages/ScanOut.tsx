@@ -1,6 +1,7 @@
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import Modal from '../components/Modal'
 import { useAuth } from '../lib/auth'
 import { arabicError, dateTime, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
@@ -16,6 +17,14 @@ interface MyMove {
 
 const READER_ID = 'barcode-reader'
 
+/** بحث بدون اعتبار الهمزات والتاء المربوطة والحروف الكبيرة: «اسفنج» يجد «إسفنج» */
+const fold = (t: string) =>
+  t.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\u064B-\u0652]/g, '').trim()
+const matches = (m: MaterialPublic, q: string) => {
+  const f = fold(q)
+  return !f || fold(`${m.name} ${m.category ?? ''}`).includes(f) || m.barcode.includes(q.trim())
+}
+
 export default function ScanOut() {
   const { session, isAdmin } = useAuth()
   const [materials, setMaterials] = useState<MaterialPublic[]>([])
@@ -30,6 +39,9 @@ export default function ScanOut() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [recent, setRecent] = useState<MyMove[]>([])
   const scanner = useRef<Html5Qrcode | null>(null)
+  // نافذة اختيار المادة يدويًا من القائمة (بدون باركود)
+  const [picking, setPicking] = useState(false)
+  const [search, setSearch] = useState('')
 
   async function load() {
     const [m, r, o] = await Promise.all([
@@ -51,16 +63,28 @@ export default function ScanOut() {
     load()
   }, [])
 
+  function choose(m: MaterialPublic) {
+    setFound(m)
+    setMsg(null)
+    setQty('')
+    setPicking(false)
+  }
+
   function lookup(value: string) {
-    const m = materials.find((x) => x.barcode === value.trim())
-    if (m) {
-      setFound(m)
-      setMsg(null)
-      setQty('')
-    } else {
-      setFound(null)
-      setMsg({ ok: false, text: `لا توجد مادة بالباركود ${value}` })
-    }
+    const v = value.trim()
+    if (!v) return openPicker('')
+    const m = materials.find((x) => x.barcode === v)
+    if (m) return choose(m)
+    setFound(null)
+    // ليس باركودًا: نبحث بالاسم في قائمة المواد
+    if (materials.some((x) => matches(x, v))) return openPicker(v)
+    setMsg({ ok: false, text: `لا توجد مادة بالباركود أو الاسم «${v}»` })
+  }
+
+  function openPicker(q: string) {
+    stopCamera()
+    setSearch(q)
+    setPicking(true)
   }
 
   async function startCamera() {
@@ -132,6 +156,7 @@ export default function ScanOut() {
     load()
   }
 
+  const shown = materials.filter((m) => matches(m, search))
   const nameOf = (id: number) => materials.find((m) => m.id === id)?.name ?? `#${id}`
   const orderOf = (id: number | null) => (id ? orders.find((o) => o.id === id)?.title ?? `طلبية ${id}` : '')
 
@@ -151,16 +176,42 @@ export default function ScanOut() {
         </div>
       )}
 
+      <button className="big-btn secondary" onClick={() => openPicker('')}>📋 اختيار من المواد الموجودة</button>
+
       <form className="scan-row" onSubmit={(e) => { e.preventDefault(); lookup(code) }}>
-        <input dir="ltr" placeholder="أو اكتب الباركود" value={code} onChange={(e) => setCode(e.target.value)} />
+        <input placeholder="أو اكتب الباركود أو اسم المادة" value={code} onChange={(e) => setCode(e.target.value)} />
         <button type="submit" className="secondary">بحث</button>
       </form>
+
+      {picking && (
+        <Modal title="اختر المادة" onClose={() => setPicking(false)}>
+          <input type="search" className="pick-search" placeholder="ابحث بالاسم أو الصنف…" aria-label="بحث عن مادة"
+            value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+          <ul className="pick-list">
+            {shown.map((m) => (
+              <li key={m.id}>
+                <button type="button" className={`pick-item${Number(m.qty) <= 0 ? ' empty' : ''}`} onClick={() => choose(m)}>
+                  <span>
+                    <strong>{m.name}</strong>
+                    {m.category && <small className="muted">{m.category}</small>}
+                  </span>
+                  <span className={m.low_stock ? 'neg' : 'muted'}>{num(m.qty)} {UNIT_LABELS[m.unit]}</span>
+                </button>
+              </li>
+            ))}
+            {!shown.length && <li className="muted center">لا توجد مادة بهذا الاسم</li>}
+          </ul>
+        </Modal>
+      )}
 
       {msg && <p className={msg.ok ? 'success' : 'error'}>{msg.text}</p>}
 
       {found && (
         <form className="card form" onSubmit={submit}>
-          <h3>{found.name}</h3>
+          <div className="job-head">
+            <h3>{found.name}</h3>
+            <button type="button" className="link" onClick={() => openPicker('')}>تغيير</button>
+          </div>
           <p className="muted">
             {found.category ?? ''} — الموجود: {num(found.qty)} {UNIT_LABELS[found.unit]}
           </p>

@@ -57,22 +57,23 @@ export async function uploadChatImage(chatId: number, file: File): Promise<strin
 const URL_TTL_S = 3600
 const URL_REUSE_MS = 45 * 60 * 1000 // نجدّد الرابط قبل انتهاء صلاحيته
 const urlCache = new Map<string, { url: string; at: number }>()
-const fresh = (p: string) => {
-  const c = urlCache.get(p)
+const fresh = (key: string) => {
+  const c = urlCache.get(key)
   return c && Date.now() - c.at < URL_REUSE_MS ? c.url : undefined
 }
 
-/** روابط مؤقتة (ساعة) لعرض الصور الخاصة */
-export async function signedUrls(paths: string[]): Promise<Map<string, string>> {
-  const missing = paths.filter((p) => !fresh(p))
+/** روابط مؤقتة (ساعة) لعرض الصور الخاصة (صور الدردشة أو صور منشورات الفريق) */
+export async function signedUrls(paths: string[], bucket: 'chat' | 'team' = 'chat'): Promise<Map<string, string>> {
+  const key = (p: string) => `${bucket}:${p}`
+  const missing = paths.filter((p) => !fresh(key(p)))
   if (missing.length) {
-    const { data } = await supabase.storage.from('chat').createSignedUrls(missing, URL_TTL_S)
+    const { data } = await supabase.storage.from(bucket).createSignedUrls(missing, URL_TTL_S)
     const now = Date.now()
-    for (const d of data ?? []) if (d.path && d.signedUrl) urlCache.set(d.path, { url: d.signedUrl, at: now })
+    for (const d of data ?? []) if (d.path && d.signedUrl) urlCache.set(key(d.path), { url: d.signedUrl, at: now })
   }
   const out = new Map<string, string>()
   for (const p of paths) {
-    const u = fresh(p)
+    const u = fresh(key(p))
     if (u) out.set(p, u)
   }
   return out

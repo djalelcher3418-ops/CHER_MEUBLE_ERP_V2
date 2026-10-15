@@ -4,8 +4,6 @@ import Modal from '../components/Modal'
 import { arabicError, dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
   BED_SIZES,
-  FABRIC_SUGGESTIONS,
-  LEGS_SUGGESTIONS,
   ORDER_STATUS_LABELS,
   PAY_LABELS,
   UNIT_LABELS,
@@ -581,8 +579,8 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
                       )}
                     </div>
                   </td>
-                  <td><input aria-label="القماش" list="fabric-list" value={l.fabric} onChange={(e) => setLine(i, { fabric: e.target.value })} placeholder="قطيفة رمادي…" maxLength={60} /></td>
-                  <td><input aria-label="الأرجل" list="legs-list" value={l.legs} onChange={(e) => setLine(i, { legs: e.target.value })} placeholder="خشب، معدن ذهبي…" maxLength={60} /></td>
+                  <td><input aria-label="القماش" value={l.fabric} onChange={(e) => setLine(i, { fabric: e.target.value })} placeholder="اكتب نوع القماش" autoComplete="off" maxLength={60} /></td>
+                  <td><input aria-label="الأرجل" value={l.legs} onChange={(e) => setLine(i, { legs: e.target.value })} placeholder="اكتب نوع الأرجل" autoComplete="off" maxLength={60} /></td>
                   <td><input aria-label="الكمية" type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
                   <td><input aria-label="سعر الوحدة" type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
                   <td>{dzd((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</td>
@@ -593,8 +591,6 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
           </table>
         </div>
         <button type="button" className="secondary" onClick={() => setLines([...lines, { ...emptyLine }])}>+ سطر</button>
-        <datalist id="fabric-list">{FABRIC_SUGGESTIONS.map((f) => <option key={f} value={f} />)}</datalist>
-        <datalist id="legs-list">{LEGS_SUGGESTIONS.map((g) => <option key={g} value={g} />)}</datalist>
 
         <div className="grid3">
           <label>التخفيض<input type="number" step="any" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} /></label>
