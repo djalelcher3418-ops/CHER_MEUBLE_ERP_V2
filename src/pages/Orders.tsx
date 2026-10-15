@@ -4,9 +4,12 @@ import Modal from '../components/Modal'
 import { arabicError, dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
   BED_SIZES,
+  FABRIC_SUGGESTIONS,
+  LEGS_SUGGESTIONS,
   ORDER_STATUS_LABELS,
   PAY_LABELS,
   UNIT_LABELS,
+  lineExtras,
   lineLabel,
   type Customer,
   type CustomerPayment,
@@ -24,8 +27,8 @@ import { orderMessage, waLink } from '../lib/whatsapp'
 import { CustomerPaymentModal } from './Customers'
 
 /** size: مقاس من القائمة أو مقاس آخر يُكتب يدويًا (custom) */
-type Line = { description: string; qty: string; unit_price: string; size: string; custom: boolean }
-const emptyLine: Line = { description: '', qty: '1', unit_price: '', size: '', custom: false }
+type Line = { description: string; qty: string; unit_price: string; size: string; custom: boolean; fabric: string; legs: string }
+const emptyLine: Line = { description: '', qty: '1', unit_price: '', size: '', custom: false, fabric: '', legs: '' }
 const OTHER_SIZE = '__other__'
 /** إن تُرك البيان فارغًا واختير مقاس: «سرير» أو «أريكة» */
 const lineDescription = (l: Line) => l.description.trim() || (l.size === 'أريكة' ? 'أريكة' : l.size.trim() ? 'سرير' : '')
@@ -331,7 +334,10 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
           <tbody>
             {d.items.map((i) => (
               <tr key={i.id}>
-                <td>{lineLabel(i.description, i.size)}</td>
+                <td>
+                  {lineLabel(i.description, i.size)}
+                  {lineExtras(i.fabric, i.legs) && <small className="line-extras">{lineExtras(i.fabric, i.legs)}</small>}
+                </td>
                 <td>{num(i.qty)}</td>
                 <td>{dzd(i.unit_price)}</td>
                 <td>{dzd(Number(i.qty) * Number(i.unit_price))}</td>
@@ -446,6 +452,8 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
           unit_price: String(i.unit_price),
           size: i.size ?? '',
           custom: !!i.size && !(BED_SIZES as readonly string[]).includes(i.size),
+          fabric: i.fabric ?? '',
+          legs: i.legs ?? '',
         }))
       : [{ ...emptyLine }],
   )
@@ -488,7 +496,14 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
         discount: Number(discount) || 0,
         ...(quote && !order ? { is_quote: true } : {}),
       },
-      p_items: valid.map((l) => ({ description: lineDescription(l), size: l.size.trim(), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
+      p_items: valid.map((l) => ({
+        description: lineDescription(l),
+        size: l.size.trim(),
+        fabric: l.fabric.trim(),
+        legs: l.legs.trim(),
+        qty: Number(l.qty),
+        unit_price: Number(l.unit_price) || 0,
+      })),
     })
     if (saveErr) { setBusy(false); return setError(arabicError(saveErr)) }
     const orderId = Number(data)
@@ -533,11 +548,11 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
 
         <div className="table-wrap">
           <table>
-            <thead><tr><th>البيان</th><th>المقاس</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th><th></th></tr></thead>
+            <thead><tr><th>البيان</th><th>المقاس</th><th>القماش</th><th>الأرجل</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th><th></th></tr></thead>
             <tbody>
               {lines.map((l, i) => (
                 <tr key={i}>
-                  <td><input value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="سرير، خزانة، كومودينو…" /></td>
+                  <td><input aria-label="البيان" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="سرير، خزانة، كومودينو…" /></td>
                   <td>
                     <div className="size-pick">
                       <select
@@ -557,8 +572,10 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
                       )}
                     </div>
                   </td>
-                  <td><input type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                  <td><input type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
+                  <td><input aria-label="القماش" list="fabric-list" value={l.fabric} onChange={(e) => setLine(i, { fabric: e.target.value })} placeholder="قطيفة رمادي…" maxLength={60} /></td>
+                  <td><input aria-label="الأرجل" list="legs-list" value={l.legs} onChange={(e) => setLine(i, { legs: e.target.value })} placeholder="خشب، معدن ذهبي…" maxLength={60} /></td>
+                  <td><input aria-label="الكمية" type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
+                  <td><input aria-label="سعر الوحدة" type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
                   <td>{dzd((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</td>
                   <td><button type="button" className="link danger" onClick={() => setLines(lines.length > 1 ? lines.filter((_, k) => k !== i) : [{ ...emptyLine }])}>✕</button></td>
                 </tr>
@@ -567,6 +584,8 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
           </table>
         </div>
         <button type="button" className="secondary" onClick={() => setLines([...lines, { ...emptyLine }])}>+ سطر</button>
+        <datalist id="fabric-list">{FABRIC_SUGGESTIONS.map((f) => <option key={f} value={f} />)}</datalist>
+        <datalist id="legs-list">{LEGS_SUGGESTIONS.map((g) => <option key={g} value={g} />)}</datalist>
 
         <div className="grid3">
           <label>التخفيض<input type="number" step="any" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} /></label>

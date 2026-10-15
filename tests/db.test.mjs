@@ -431,6 +431,33 @@ const bedToken = (await q(`select track_token from orders where id = ${BED}`))[0
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 ok((await q(`select track_order('${bedToken}') as t`))[0].t.items[0].size === '120/190', 'the customer page shows the size')
 
+// --- phase 13: fabric and legs per order line
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/013_fabric_legs.sql', 'utf8'))
+console.log('ok   fabric/legs migration ran on existing data')
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 13, 'schema version is 13')
+ok((await q(`select size from order_items where order_id = ${BED}`))[0].size === '120/190', 'existing sizes survive the migration')
+const SOFA = (await q(`select save_order(null, '{"customer_id":1,"title":"صالون","order_date":"2026-10-15"}', '[{"description":"سرير","size":"160/190","fabric":" قطيفة ","legs":"معدن ذهبي","qty":1,"unit_price":60000},{"description":"أريكة","size":"أريكة","fabric":"","legs":"  ","qty":1,"unit_price":45000}]') as id`))[0].id
+const fl = await q(`select size, fabric, legs from order_items where order_id = ${SOFA} order by id`)
+ok(fl[0].size === '160/190' && fl[0].fabric === 'قطيفة' && fl[0].legs === 'معدن ذهبي', 'each line keeps its size, fabric and legs (trimmed)')
+ok(fl[1].fabric === null && fl[1].legs === null, 'empty fabric/legs are stored as nothing')
+let longFabric = false; try { await q(`select save_order(null, '{"customer_id":1,"title":"x","order_date":"2026-10-15"}', '[{"description":"سرير","fabric":"${'ق'.repeat(61)}","qty":1,"unit_price":1}]')`) } catch { longFabric = true }
+ok(longFabric, 'an absurdly long fabric name is refused')
+let longLegs = false; try { await q(`select save_order(null, '{"customer_id":1,"title":"x","order_date":"2026-10-15"}', '[{"description":"سرير","legs":"${'x'.repeat(61)}","qty":1,"unit_price":1}]')`) } catch { longLegs = true }
+ok(longLegs, 'an absurdly long legs name is refused')
+await q(`select save_order(${SOFA}, '{"customer_id":1,"title":"صالون","order_date":"2026-10-15"}', '[{"description":"سرير","size":"160/190","fabric":"شنيل","legs":"خشب","qty":1,"unit_price":60000}]')`)
+const fl2 = await q(`select fabric, legs from order_items where order_id = ${SOFA}`)
+ok(fl2.length === 1 && fl2[0].fabric === 'شنيل' && fl2[0].legs === 'خشب', 'editing the order updates fabric and legs')
+await as(WORKER)
+const wf = await q(`select * from order_items_public where order_id = ${SOFA}`)
+ok(wf.length === 1 && wf[0].fabric === 'شنيل' && wf[0].legs === 'خشب' && wf[0].size === '160/190' && wf[0].unit_price === undefined, 'the workshop sees fabric and legs, still without prices')
+await as(ADMIN)
+const sofaToken = (await q(`select track_token from orders where id = ${SOFA}`))[0].track_token
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+const ti = (await q(`select track_order('${sofaToken}') as t`))[0].t.items[0]
+ok(ti.fabric === 'شنيل' && ti.legs === 'خشب' && ti.size === '160/190' && ti.unit_price === undefined, 'the customer page shows fabric and legs, without unit prices')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

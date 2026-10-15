@@ -16,6 +16,8 @@ interface JobItem {
   order_id: number
   description: string
   size?: string | null
+  fabric?: string | null
+  legs?: string | null
   qty: number
 }
 
@@ -88,6 +90,12 @@ export default function Workshop() {
                   {lines.map((l) => (
                     <li key={l.id}>
                       {l.description}{l.size && <strong className="size-tag">{l.size}</strong>} × {num(l.qty)}
+                      {(l.fabric || l.legs) && (
+                        <div className="line-tags">
+                          {l.fabric && <span className="spec-tag">قماش: {l.fabric}</span>}
+                          {l.legs && <span className="spec-tag">أرجل: {l.legs}</span>}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

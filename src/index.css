@@ -430,3 +430,6 @@ a.btn.secondary-link { background: var(--brand-soft); color: var(--brand); }
 /* ---------- المرحلة 12: مقاس السرير ---------- */
 .size-pick { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
 .size-tag { display: inline-block; margin-inline-start: 6px; padding: 1px 8px; border-radius: 8px; background: var(--brand-soft); color: var(--brand); font-size: 14px; direction: ltr; }
+.line-extras { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+.line-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.spec-tag { display: inline-block; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: 13px; }

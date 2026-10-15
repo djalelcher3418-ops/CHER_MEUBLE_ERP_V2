@@ -89,9 +89,13 @@
 - المقاس يظهر في تفاصيل الطلبية، الفاتورة، لوحة الورشة، صفحة الزبون، وملف Excel
 - إضافة صور السرير المطلوب مباشرة من نافذة إنشاء الطلبية (تُرفع عند الحفظ)
 
+## المرحلة 13: نوع القماش ونوع الأرجل
+- خانتا «القماش» و«الأرجل» لكل سطر في الطلبية، مع اقتراحات جاهزة (قطيفة، شنيل، كتان… / خشب، معدن ذهبي، كروم…) ويمكن كتابة أي نوع آخر
+- تظهران في تفاصيل الطلبية، الفاتورة وعرض السعر، بطاقة الورشة للعامل (بدون أسعار)، صفحة تتبع الزبون، وملف Excel
+
 ## قاعدة البيانات
 - `supabase/001_phase1.sql` (مُشغَّل مسبقًا على Supabase).
-- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
+- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
 
 ## التشغيل على الكمبيوتر
 ```

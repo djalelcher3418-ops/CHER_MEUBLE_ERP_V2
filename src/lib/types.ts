@@ -171,14 +171,25 @@ export interface OrderItem {
   unit_price: number
   /** مقاس السرير أو «أريكة» (المرحلة 12) */
   size?: string | null
+  /** نوع القماش ونوع الأرجل (المرحلة 13) */
+  fabric?: string | null
+  legs?: string | null
 }
 
 /** مقاسات الأسرّة المعتادة في الورشة */
 export const BED_SIZES = ['90/190', '120/190', '140/190', '160/190', '180/200', 'أريكة'] as const
 
+/** اقتراحات تظهر عند الكتابة؛ يمكن كتابة أي نوع آخر */
+export const FABRIC_SUGGESTIONS = ['قطيفة', 'شنيل', 'كتان', 'بوكليه', 'جلد صناعي', 'جلد طبيعي', 'تيسو'] as const
+export const LEGS_SUGGESTIONS = ['خشب', 'معدن ذهبي', 'معدن أسود', 'كروم', 'أكريليك شفاف', 'بدون أرجل (قاعدة)'] as const
+
 /** وصف السطر كما يُعرض: «سرير — 160/190» */
 export const lineLabel = (description: string, size?: string | null) =>
   size ? (description ? `${description} — ${size}` : size) : description
+
+/** تفاصيل السطر: «قماش: قطيفة رمادي · أرجل: خشب» (فارغ إن لم يُحدَّدا) */
+export const lineExtras = (fabric?: string | null, legs?: string | null) =>
+  [fabric && `قماش: ${fabric}`, legs && `أرجل: ${legs}`].filter(Boolean).join(' · ')
 
 /** ما يراه العامل: الطلبيات الجارية بدون مبالغ */
 export interface OrderPublic {
