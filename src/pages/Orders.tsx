@@ -3,9 +3,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import { arabicError, dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
 import {
+  BED_SIZES,
   ORDER_STATUS_LABELS,
   PAY_LABELS,
   UNIT_LABELS,
+  lineLabel,
   type Customer,
   type CustomerPayment,
   type Order,
@@ -15,13 +17,18 @@ import {
   type PayMethod,
   type Unit,
 } from '../lib/types'
+import Icon from '../components/Icon'
 import PhotoStrip from '../components/PhotoStrip'
-import { loadOrderPhotos, trackUrl, type OrderPhoto } from '../lib/orderPhotos'
+import { addOrderPhoto, loadOrderPhotos, trackUrl, type OrderPhoto } from '../lib/orderPhotos'
 import { orderMessage, waLink } from '../lib/whatsapp'
 import { CustomerPaymentModal } from './Customers'
 
-type Line = { description: string; qty: string; unit_price: string }
-const emptyLine: Line = { description: '', qty: '1', unit_price: '' }
+/** size: مقاس من القائمة أو مقاس آخر يُكتب يدويًا (custom) */
+type Line = { description: string; qty: string; unit_price: string; size: string; custom: boolean }
+const emptyLine: Line = { description: '', qty: '1', unit_price: '', size: '', custom: false }
+const OTHER_SIZE = '__other__'
+/** إن تُرك البيان فارغًا واختير مقاس: «سرير» أو «أريكة» */
+const lineDescription = (l: Line) => l.description.trim() || (l.size === 'أريكة' ? 'أريكة' : l.size.trim() ? 'سرير' : '')
 
 const ACTIVE: OrderStatus[] = ['new', 'in_production', 'ready']
 
@@ -324,7 +331,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
           <tbody>
             {d.items.map((i) => (
               <tr key={i.id}>
-                <td>{i.description}</td>
+                <td>{lineLabel(i.description, i.size)}</td>
                 <td>{num(i.qty)}</td>
                 <td>{dzd(i.unit_price)}</td>
                 <td>{dzd(Number(i.qty) * Number(i.unit_price))}</td>
@@ -432,15 +439,26 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
   const [notes, setNotes] = useState(order?.notes ?? '')
   const [discount, setDiscount] = useState(order ? String(order.discount) : '')
   const [lines, setLines] = useState<Line[]>(
-    items?.length ? items.map((i) => ({ description: i.description, qty: String(i.qty), unit_price: String(i.unit_price) })) : [{ ...emptyLine }],
+    items?.length
+      ? items.map((i) => ({
+          description: i.description,
+          qty: String(i.qty),
+          unit_price: String(i.unit_price),
+          size: i.size ?? '',
+          custom: !!i.size && !(BED_SIZES as readonly string[]).includes(i.size),
+        }))
+      : [{ ...emptyLine }],
   )
   const [deposit, setDeposit] = useState('')
   const [method, setMethod] = useState<PayMethod>('cash')
+  const [photos, setPhotos] = useState<File[]>([])
+  const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos])
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   // نحسب فقط الأسطر التي ستُحفظ فعلًا (لها بيان وكمية)
-  const isValid = (l: Line) => !!l.description.trim() && Number(l.qty) > 0
+  const isValid = (l: Line) => !!lineDescription(l) && Number(l.qty) > 0
   const subtotal = lines.filter(isValid).reduce((a, l) => a + Number(l.qty) * (Number(l.unit_price) || 0), 0)
   const total = subtotal - (Number(discount) || 0)
   const ignored = lines.filter((l) => !isValid(l) && (l.description.trim() || Number(l.unit_price) > 0)).length
@@ -470,10 +488,20 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
         discount: Number(discount) || 0,
         ...(quote && !order ? { is_quote: true } : {}),
       },
-      p_items: valid.map((l) => ({ description: l.description.trim(), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
+      p_items: valid.map((l) => ({ description: lineDescription(l), size: l.size.trim(), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
     })
     if (saveErr) { setBusy(false); return setError(arabicError(saveErr)) }
     const orderId = Number(data)
+
+    // صور السرير المطلوب: تُرفع بعد حفظ الطلبية
+    for (const f of photos) {
+      try {
+        await addOrderPhoto(orderId, f)
+      } catch (e) {
+        setBusy(false)
+        return setError('حُفظت الطلبية لكن صورة لم تُرفع: ' + arabicError(e) + ' — يمكنك إضافتها من تفاصيل الطلبية.')
+      }
+    }
     if (order) return onDone(orderId)
 
     if (Number(deposit) > 0) {
@@ -505,11 +533,30 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
 
         <div className="table-wrap">
           <table>
-            <thead><tr><th>البيان</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th><th></th></tr></thead>
+            <thead><tr><th>البيان</th><th>المقاس</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th><th></th></tr></thead>
             <tbody>
               {lines.map((l, i) => (
                 <tr key={i}>
                   <td><input value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="سرير، خزانة، كومودينو…" /></td>
+                  <td>
+                    <div className="size-pick">
+                      <select
+                        aria-label="المقاس"
+                        value={l.custom ? OTHER_SIZE : l.size}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setLine(i, v === OTHER_SIZE ? { custom: true, size: '' } : { custom: false, size: v })
+                        }}
+                      >
+                        <option value="">—</option>
+                        {BED_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        <option value={OTHER_SIZE}>مقاس آخر…</option>
+                      </select>
+                      {l.custom && (
+                        <input aria-label="مقاس آخر" value={l.size} onChange={(e) => setLine(i, { size: e.target.value })} placeholder="200/220" maxLength={40} />
+                      )}
+                    </div>
+                  </td>
                   <td><input type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
                   <td><input type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
                   <td>{dzd((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</td>
@@ -543,6 +590,25 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
         )}
 
         <label>ملاحظات (المقاسات، الألوان، القماش…)<input value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+
+        <div>
+          <span className="muted">صور السرير المطلوب (التصميم، صورة من الزبون…)</span>
+          <div className="photo-row" style={{ marginTop: 6 }}>
+            {previews.map((u, k) => (
+              <button key={u} type="button" className="photo" aria-label="إزالة الصورة" title="إزالة"
+                onClick={() => setPhotos(photos.filter((_, j) => j !== k))}>
+                <img src={u} alt="" />
+              </button>
+            ))}
+            <label className="photo add" style={{ cursor: 'pointer' }}>
+              <Icon name="image" />
+              <small>إضافة صورة</small>
+              <input type="file" accept="image/*" multiple hidden
+                onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) setPhotos([...photos, ...fs]); e.target.value = '' }} />
+            </label>
+          </div>
+          {photos.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{photos.length} صورة ستُرفع عند الحفظ. اضغط على صورة لإزالتها.</p>}
+        </div>
 
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : quote ? 'حفظ عرض السعر' : 'حفظ الطلبية'}</button>

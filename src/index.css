@@ -426,3 +426,7 @@ a.btn.secondary-link { background: var(--brand-soft); color: var(--brand); }
 .status.st-quote { background: #efe4fb; color: #6b3fa0; }
 @media (prefers-color-scheme: dark) { .status.st-quote { background: #2f2240; color: #c9a3e6; } }
 .quote-box { border-color: #b896de; background: color-mix(in srgb, #b896de 10%, var(--surface)); margin: 0; }
+
+/* ---------- المرحلة 12: مقاس السرير ---------- */
+.size-pick { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
+.size-tag { display: inline-block; margin-inline-start: 6px; padding: 1px 8px; border-radius: 8px; background: var(--brand-soft); color: var(--brand); font-size: 14px; direction: ltr; }

@@ -410,6 +410,27 @@ ok(again, 'an order cannot be converted twice')
 await as(WORKER)
 ok((await q(`select * from orders_public where id = ${QUOTE}`)).length === 1, 'the converted order reaches the workshop')
 
+// --- phase 12: bed size per order line
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/012_bed_size.sql', 'utf8'))
+console.log('ok   bed size migration ran on existing data')
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 12, 'schema version is 12')
+const BED = (await q(`select save_order(null, '{"customer_id":1,"title":"غرفة أطفال","order_date":"2026-10-15"}', '[{"description":"سرير","size":"90/190","qty":2,"unit_price":30000},{"description":"أريكة","size":"أريكة","qty":1,"unit_price":45000},{"description":"خزانة","size":"","qty":1,"unit_price":40000}]') as id`))[0].id
+const sizes = (await q(`select size from order_items where order_id = ${BED} order by id`)).map((r) => r.size)
+ok(sizes[0] === '90/190' && sizes[1] === 'أريكة' && sizes[2] === null, `each line keeps its size, empty size is stored as nothing (${sizes})`)
+let longSize = false; try { await q(`select save_order(null, '{"customer_id":1,"title":"x","order_date":"2026-10-15"}', '[{"description":"سرير","size":"${'9'.repeat(41)}","qty":1,"unit_price":1}]')`) } catch { longSize = true }
+ok(longSize, 'an absurdly long size is refused')
+await q(`select save_order(${BED}, '{"customer_id":1,"title":"غرفة أطفال","order_date":"2026-10-15"}', '[{"description":"سرير","size":"120/190","qty":2,"unit_price":32000}]')`)
+ok((await q(`select size from order_items where order_id = ${BED}`))[0].size === '120/190', 'editing the order updates the size')
+await as(WORKER)
+const wl = await q(`select description, size from order_items_public where order_id = ${BED}`)
+ok(wl.length === 1 && wl[0].size === '120/190' && wl[0].unit_price === undefined, 'the workshop sees the size, still without prices')
+await as(ADMIN)
+const bedToken = (await q(`select track_token from orders where id = ${BED}`))[0].track_token
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+ok((await q(`select track_order('${bedToken}') as t`))[0].t.items[0].size === '120/190', 'the customer page shows the size')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

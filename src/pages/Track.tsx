@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { dzd, num, supabase } from '../lib/supabase'
-import { ORDER_STATUS_LABELS, type OrderStatus } from '../lib/types'
+import { ORDER_STATUS_LABELS, lineLabel, type OrderStatus } from '../lib/types'
 
 interface Tracked {
   id: number
@@ -14,7 +14,7 @@ interface Tracked {
   total: number
   paid: number
   is_quote?: boolean
-  items: { description: string; qty: number }[]
+  items: { description: string; qty: number; size?: string | null }[]
 }
 
 const STEPS: OrderStatus[] = ['new', 'in_production', 'ready', 'delivered']
@@ -92,7 +92,7 @@ export default function Track() {
         <section className="card">
           <h3>محتوى الطلبية</h3>
           <ul className="list">
-            {o.items.map((i, k) => <li key={k}><span>{i.description}</span><strong>× {num(i.qty)}</strong></li>)}
+            {o.items.map((i, k) => <li key={k}><span>{lineLabel(i.description, i.size)}</span><strong>× {num(i.qty)}</strong></li>)}
           </ul>
         </section>
       )}

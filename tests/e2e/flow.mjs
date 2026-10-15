@@ -29,6 +29,8 @@ const step = async (name, fn) => { try { await fn() } catch (e) { ok(false, `${n
 const shot = (p, n) => p.screenshot({ path: `${OUT}/e2e-${n}.png` })
 const go = async (p, path) => { await p.goto('http://localhost:4174' + path); await p.waitForLoadState('networkidle'); await p.waitForTimeout(300) }
 
+const PNG = { name: 'design.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }
+
 async function login(p, id, pin) {
   await go(p, '/')
   await p.getByLabel('رقم الهاتف أو البريد الإلكتروني').fill(id)
@@ -110,7 +112,10 @@ await step('order', async () => {
   await m.getByLabel('موعد التسليم').fill(inDays(7))
   await m.getByLabel('الطلبية', { exact: true }).fill('غرفة نوم كاملة')
   let row = m.locator('tbody tr').nth(0)
-  await row.locator('input').nth(0).fill('سرير 160×200'); await row.locator('input').nth(1).fill('1'); await row.locator('input').nth(2).fill('70000')
+  await row.locator('input').nth(0).fill('سرير بلوح رأس'); await row.locator('input').nth(1).fill('1'); await row.locator('input').nth(2).fill('70000')
+  await row.getByLabel('المقاس').selectOption('160/190')
+  await m.locator('input[type=file]').setInputFiles({ ...PNG, name: 'client-bed.png' })
+  await m.locator('.photo img').first().waitFor()
   await m.getByRole('button', { name: '+ سطر' }).click()
   row = m.locator('tbody tr').nth(1)
   await row.locator('input').nth(0).fill('خزانة 4 أبواب'); await row.locator('input').nth(1).fill('1'); await row.locator('input').nth(2).fill('85000')
@@ -121,9 +126,12 @@ await step('order', async () => {
   const t = await one(`select total, paid, status from order_totals where id = 1`)
   ok(Number(t.total) === 150000 && Number(t.paid) === 50000 && t.status === 'new', `order saved: total ${t.total}, deposit ${t.paid}, status ${t.status}`)
   ok(await p.locator('.modal >> text=واتساب للزبون').count() === 1, 'order details show the WhatsApp button')
+  const sz = await one(`select size from order_items where order_id = 1 and size is not null`)
+  ok(sz?.size === '160/190', 'the bed size 160/190 was saved with the line')
+  ok(await p.locator('.modal >> text=سرير بلوح رأس — 160/190').count() === 1, 'order details show the bed with its size')
+  ok((await one(`select count(*)::int n from order_photos where order_id = 1`)).n === 1, 'the photo chosen in the order form was uploaded')
   await shot(p, 'order')
 })
-const PNG = { name: 'design.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }
 let trackLink
 await step('order photo + tracking link', async () => {
   await go(p, '/orders?open=1')
@@ -132,7 +140,7 @@ await step('order photo + tracking link', async () => {
   await m.locator('input[type=file]').setInputFiles(PNG)
   await m.locator('.photo img').first().waitFor({ timeout: 10000 })
   const ph = await one(`select count(*)::int n from order_photos where order_id = 1`)
-  ok(ph.n === 1, 'manager attached a design photo to the order')
+  ok(ph.n === 2, 'manager attached another photo from the order details')
   trackLink = await m.getByRole('link', { name: 'فتح صفحة الزبون' }).getAttribute('href')
   ok(/\/track\/[0-9a-f-]{36}$/.test(trackLink ?? ''), `order has a customer tracking link (${trackLink})`)
   const wa = decodeURIComponent((await m.locator('a.wa').getAttribute('href')) ?? '')
@@ -227,6 +235,7 @@ await step('worker sees and adds photos', async () => {
   await go(p, '/workshop')
   await p.locator('.job .photo img').first().waitFor({ timeout: 10000 })
   ok(true, "worker sees the design photo on the workshop card")
+  ok(await p.locator('.job .size-tag', { hasText: '160/190' }).count() === 1, 'worker sees the bed size on the workshop card')
   await p.locator('.job input[type=file]').first().setInputFiles({ ...PNG, name: 'done.png' })
   await p.waitForTimeout(1500)
   const r = await one(`select count(*)::int n from order_photos ph join profiles pr on pr.id = ph.created_by where pr.full_name = 'كريم'`)
@@ -295,7 +304,7 @@ await step('customer tracking page', async () => {
 })
 await step('invoice', async () => {
   await go(p, '/invoice/1')
-  ok(await p.locator('text=فاتورة رقم 1').count() === 1 && await p.locator('text=سرير 160×200').count() === 1, 'invoice page shows the order')
+  ok(await p.locator('text=فاتورة رقم 1').count() === 1 && await p.locator('text=سرير بلوح رأس — 160/190').count() === 1, 'invoice page shows the order with the bed size')
 })
 await step('report', async () => {
   await go(p, '/reports'); await p.waitForTimeout(800)

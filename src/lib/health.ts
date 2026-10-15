@@ -33,6 +33,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p11', label: 'عروض الأسعار', fix: 'شغّل supabase/011_quotes.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 11,
   },
+  {
+    key: 'p12', label: 'مقاسات الأسرّة في الطلبيات', fix: 'شغّل supabase/012_bed_size.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 12,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */

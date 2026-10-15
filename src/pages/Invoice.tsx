@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { arabicError, dzd, num, supabase } from '../lib/supabase'
-import { PAY_LABELS, type Customer, type CustomerPayment, type OrderItem, type OrderTotal } from '../lib/types'
+import { PAY_LABELS, lineLabel, type Customer, type CustomerPayment, type OrderItem, type OrderTotal } from '../lib/types'
 
 interface Data {
   o: OrderTotal
@@ -74,7 +74,7 @@ export default function Invoice() {
             {items.map((r, k) => (
               <tr key={r.id}>
                 <td>{k + 1}</td>
-                <td>{r.description}</td>
+                <td>{lineLabel(r.description, r.size)}</td>
                 <td>{num(r.qty)}</td>
                 <td>{dzd(r.unit_price)}</td>
                 <td>{dzd(Number(r.qty) * Number(r.unit_price))}</td>

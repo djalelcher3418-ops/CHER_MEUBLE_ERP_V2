@@ -169,7 +169,16 @@ export interface OrderItem {
   description: string
   qty: number
   unit_price: number
+  /** مقاس السرير أو «أريكة» (المرحلة 12) */
+  size?: string | null
 }
+
+/** مقاسات الأسرّة المعتادة في الورشة */
+export const BED_SIZES = ['90/190', '120/190', '140/190', '160/190', '180/200', 'أريكة'] as const
+
+/** وصف السطر كما يُعرض: «سرير — 160/190» */
+export const lineLabel = (description: string, size?: string | null) =>
+  size ? (description ? `${description} — ${size}` : size) : description
 
 /** ما يراه العامل: الطلبيات الجارية بدون مبالغ */
 export interface OrderPublic {
