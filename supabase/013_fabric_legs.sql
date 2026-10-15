@@ -3,8 +3,15 @@
 -- يُشغَّل مرة واحدة بعد 012_bed_size.sql (Supabase → SQL Editor → Run)
 -- =====================================================================
 
-alter table order_items add column fabric text check (fabric is null or length(fabric) <= 60);
-alter table order_items add column legs   text check (legs   is null or length(legs)   <= 60);
+-- يجب تشغيل 012_bed_size.sql قبل هذا الملف
+do $$ begin
+  if erp_schema_version() < 12 then
+    raise exception 'شغّل الملف 012_bed_size.sql أولًا ثم أعد تشغيل هذا الملف';
+  end if;
+end $$;
+
+alter table order_items add column if not exists fabric text check (fabric is null or length(fabric) <= 60);
+alter table order_items add column if not exists legs   text check (legs   is null or length(legs)   <= 60);
 
 -- الورشة ترى القماش والأرجل (الأعمدة الجديدة في آخر العرض)
 create or replace view order_items_public as

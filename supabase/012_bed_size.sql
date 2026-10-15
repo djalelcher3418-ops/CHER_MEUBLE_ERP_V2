@@ -4,7 +4,14 @@
 -- يُشغَّل مرة واحدة بعد 011_quotes.sql (Supabase → SQL Editor → Run)
 -- =====================================================================
 
-alter table order_items add column size text check (size is null or length(size) <= 40);
+-- لا يُعاد تشغيله بعد ملف أحدث (كان سيُرجع الدوال إلى نسختها القديمة)
+do $$ begin
+  if erp_schema_version() > 12 then
+    raise exception 'هذا الملف شُغّل من قبل وقاعدة البيانات أحدث منه — لا حاجة لتشغيله';
+  end if;
+end $$;
+
+alter table order_items add column if not exists size text check (size is null or length(size) <= 40);
 
 -- الورشة ترى المقاس (العمود الجديد في آخر العرض)
 create or replace view order_items_public as

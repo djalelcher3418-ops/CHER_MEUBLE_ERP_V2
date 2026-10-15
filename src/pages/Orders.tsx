@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import { arabicError, dateTime, dzd, num, supabase, todayISO } from '../lib/supabase'
@@ -459,9 +459,12 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
   )
   const [deposit, setDeposit] = useState('')
   const [method, setMethod] = useState<PayMethod>('cash')
-  const [photos, setPhotos] = useState<File[]>([])
-  const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos])
-  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews])
+  const [photos, setPhotos] = useState<{ file: File; url: string }[]>([])
+  const photosRef = useRef(photos)
+  useEffect(() => { photosRef.current = photos }, [photos])
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), [])
+  // رقم الطلبية بعد أول حفظ: إعادة الضغط على «حفظ» بعد خطأ تعدّلها ولا تنشئ طلبية ثانية
+  const savedId = useRef<number | null>(order?.id ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -486,7 +489,7 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
 
     // الطلبية وأسطرها تُحفظ دفعة واحدة في قاعدة البيانات: إمّا كلها أو لا شيء
     const { data, error: saveErr } = await supabase.rpc('save_order', {
-      p_id: order?.id ?? null,
+      p_id: savedId.current,
       p_order: {
         customer_id: Number(customerId),
         title: title.trim(),
@@ -507,23 +510,29 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
     })
     if (saveErr) { setBusy(false); return setError(arabicError(saveErr)) }
     const orderId = Number(data)
+    savedId.current = orderId
 
-    // صور السرير المطلوب: تُرفع بعد حفظ الطلبية
-    for (const f of photos) {
+    // صور السرير المطلوب: تُرفع بعد حفظ الطلبية، وكل صورة رُفعت تُزال من القائمة حتى لا تتكرر
+    let left = photos
+    for (const p of photos) {
       try {
-        await addOrderPhoto(orderId, f)
+        await addOrderPhoto(orderId, p.file)
+        URL.revokeObjectURL(p.url)
+        left = left.filter((x) => x !== p)
       } catch (e) {
+        setPhotos(left)
         setBusy(false)
-        return setError('حُفظت الطلبية لكن صورة لم تُرفع: ' + arabicError(e) + ' — يمكنك إضافتها من تفاصيل الطلبية.')
+        return setError('حُفظت الطلبية لكن صورة لم تُرفع: ' + arabicError(e) + ' — اضغط «حفظ» مرة أخرى لإعادة المحاولة.')
       }
     }
+    setPhotos(left)
     if (order) return onDone(orderId)
 
     if (Number(deposit) > 0) {
       const pay = await supabase.from('customer_payments').insert({
         customer_id: Number(customerId), order_id: orderId, amount: Number(deposit), paid_on: orderDate, method, notes: 'عربون',
       })
-      if (pay.error) { setBusy(false); return setError('حُفظت الطلبية لكن العربون لم يُحفظ: ' + arabicError(pay.error)) }
+      if (pay.error) { setBusy(false); return setError('حُفظت الطلبية لكن العربون لم يُحفظ: ' + arabicError(pay.error) + ' — اضغط «حفظ» مرة أخرى لإعادة المحاولة.') }
     }
     onDone(orderId)
   }
@@ -613,17 +622,17 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
         <div>
           <span className="muted">صور السرير المطلوب (التصميم، صورة من الزبون…)</span>
           <div className="photo-row" style={{ marginTop: 6 }}>
-            {previews.map((u, k) => (
-              <button key={u} type="button" className="photo" aria-label="إزالة الصورة" title="إزالة"
-                onClick={() => setPhotos(photos.filter((_, j) => j !== k))}>
-                <img src={u} alt="" />
+            {photos.map((p) => (
+              <button key={p.url} type="button" className="photo" aria-label="إزالة الصورة" title="إزالة"
+                onClick={() => { URL.revokeObjectURL(p.url); setPhotos(photos.filter((x) => x !== p)) }}>
+                <img src={p.url} alt="" />
               </button>
             ))}
             <label className="photo add" style={{ cursor: 'pointer' }}>
               <Icon name="image" />
               <small>إضافة صورة</small>
               <input type="file" accept="image/*" multiple hidden
-                onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) setPhotos([...photos, ...fs]); e.target.value = '' }} />
+                onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) setPhotos([...photos, ...fs.map((file) => ({ file, url: URL.createObjectURL(file) }))]); e.target.value = '' }} />
             </label>
           </div>
           {photos.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{photos.length} صورة ستُرفع عند الحفظ. اضغط على صورة لإزالتها.</p>}

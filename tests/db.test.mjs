@@ -457,6 +457,12 @@ const sofaToken = (await q(`select track_token from orders where id = ${SOFA}`))
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 const ti = (await q(`select track_order('${sofaToken}') as t`))[0].t.items[0]
 ok(ti.fabric === 'شنيل' && ti.legs === 'خشب' && ti.size === '160/190' && ti.unit_price === undefined, 'the customer page shows fabric and legs, without unit prices')
+await db.exec('reset role')
+let old012 = ''; try { await db.exec(fs.readFileSync(R + '/supabase/012_bed_size.sql', 'utf8')) } catch (e) { old012 = e.message }
+ok(old012.includes('شُغّل من قبل'), 'running the older 012 again after 013 is refused with a clear message')
+await db.exec(fs.readFileSync(R + '/supabase/013_fabric_legs.sql', 'utf8'))
+const rerun = await q(`select erp_schema_version() as v, (select fabric from order_items where order_id = ${SOFA}) as f`)
+ok(rerun[0].v === 13 && rerun[0].f === 'شنيل', 'running 013 a second time by mistake is harmless')
 
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
