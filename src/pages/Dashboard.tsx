@@ -92,8 +92,9 @@ export default function Dashboard() {
             return (
               <li key={o.id}>
                 <Link to={`/orders?open=${o.id}`}>{o.id} — {o.title} — {o.customer_name}</Link>
-                <span className={late ? 'neg' : 'muted'}>
-                  {ORDER_STATUS_LABELS[o.status]} · {o.due_date ?? 'بدون موعد'}{late ? ' (متأخرة)' : ''}
+                <span className={`meta ${late ? 'neg' : 'muted'}`}>
+                  <span className={`status st-${o.status}`}>{ORDER_STATUS_LABELS[o.status]}</span>
+                  <span>{o.due_date ?? 'بدون موعد'}{late ? ' (متأخرة)' : ''}</span>
                 </span>
               </li>
             )
@@ -130,7 +131,7 @@ export default function Dashboard() {
           {outs.map((o) => (
             <li key={o.id}>
               <span>{o.materials?.name} — {num(o.qty)} {o.note ? `(${o.note})` : ''}</span>
-              <span className="muted">{o.profiles?.full_name ?? ''} · {dateTime(o.created_at)}</span>
+              <span className="muted meta"><span>{o.profiles?.full_name ?? ''}</span><span>{dateTime(o.created_at)}</span></span>
             </li>
           ))}
           {!outs.length && <li className="muted">لا حركات بعد</li>}

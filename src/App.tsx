@@ -142,7 +142,7 @@ export default function App() {
         <div className="logo">CM</div>
         <button className="title appbar-me" onClick={() => setAccount(true)} aria-label="حسابي">
           <strong>CHER MEUBLE</strong>
-          <span>{profile.full_name} · {isAdmin ? 'المدير' : 'عامل'}</span>
+          <span>{profile.full_name}<em className="role">{isAdmin ? 'المدير' : 'عامل'}</em></span>
         </button>
         <button className="icon-btn" onClick={logout} aria-label="خروج"><Icon name="logout" /></button>
       </header>

@@ -82,8 +82,9 @@ export default function Workshop() {
                 <h3>{j.id} — {j.title}</h3>
                 <span className={`status st-${j.status}`}>{ORDER_STATUS_LABELS[j.status]}</span>
               </div>
-              <div className="muted">
-                {j.customer_name} · التسليم: <span className={late ? 'neg' : ''}>{j.due_date ?? 'بدون موعد'}{late ? ' (متأخرة)' : ''}</span>
+              <div className="muted meta-line">
+                <span>{j.customer_name}</span>
+                <span>التسليم: <span className={late ? 'neg' : ''}>{j.due_date ?? 'بدون موعد'}{late ? ' (متأخرة)' : ''}</span></span>
               </div>
               {lines.length > 0 && (
                 <ul>

@@ -1,6 +1,7 @@
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import { useAuth } from '../lib/auth'
 import { arabicError, dateTime, num, supabase } from '../lib/supabase'
@@ -168,7 +169,7 @@ export default function ScanOut() {
       )}
 
       {!camera ? (
-        <button className="big-btn" onClick={startCamera}>📷 مسح الباركود بالكاميرا</button>
+        <button className="big-btn" onClick={startCamera}><Icon name="camera" /> مسح الباركود بالكاميرا</button>
       ) : (
         <div>
           <div id={READER_ID} className="reader" />
@@ -176,7 +177,7 @@ export default function ScanOut() {
         </div>
       )}
 
-      <button className="big-btn secondary" onClick={() => openPicker('')}>📋 اختيار من المواد الموجودة</button>
+      <button className="big-btn secondary" onClick={() => openPicker('')}><Icon name="list" /> اختيار من المواد الموجودة</button>
 
       <form className="scan-row" onSubmit={(e) => { e.preventDefault(); lookup(code) }}>
         <input placeholder="أو اكتب الباركود أو اسم المادة" value={code} onChange={(e) => setCode(e.target.value)} />

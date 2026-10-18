@@ -395,7 +395,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
         {d.moves.map((m) => (
           <li key={m.id}>
             <span>{m.materials?.name} — {num(m.qty)} {m.materials ? UNIT_LABELS[m.materials.unit] : ''}</span>
-            <span className="muted">{dzd(Number(m.qty) * Number(m.unit_cost ?? 0))} · {m.profiles?.full_name ?? ''} · {new Date(m.created_at).toLocaleDateString('fr-DZ')}</span>
+            <span className="muted meta"><span>{dzd(Number(m.qty) * Number(m.unit_cost ?? 0))}</span><span>{m.profiles?.full_name ?? ''}</span><span>{new Date(m.created_at).toLocaleDateString('fr-DZ')}</span></span>
           </li>
         ))}
         {!d.moves.length && <li className="muted">لم تخرج أي مادة بعد. اختر هذه الطلبية في صفحة «إخراج مواد».</li>}
@@ -408,7 +408,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
             {d.events.map((e) => (
               <li key={e.id}>
                 <span>{ORDER_STATUS_LABELS[e.status]}</span>
-                <span className="muted">{e.profiles?.full_name ?? ''} · {dateTime(e.created_at)}</span>
+                <span className="muted meta"><span>{e.profiles?.full_name ?? ''}</span><span>{dateTime(e.created_at)}</span></span>
               </li>
             ))}
           </ul>

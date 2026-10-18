@@ -23,6 +23,10 @@ const PATHS: Record<string, string> = {
   key: 'M15.5 7.5a3.5 3.5 0 1 0 0 .01M13 10l-9 9M7 16l2 2M10 13l2 2',
   designer: 'M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6',
   status: 'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12l2 2 4-4',
+  camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7',
+  list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+  thanks: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+  trophy: 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M10 17h4',
 }
 
 export type IconName = keyof typeof PATHS

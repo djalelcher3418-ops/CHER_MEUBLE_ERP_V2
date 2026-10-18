@@ -136,7 +136,7 @@ export default function Team() {
               <span><b>{p.author_name}</b> يشكر <b>{p.kudos_name}</b></span>
             </div>
           )}
-          {p.kind === 'game' && <div className="game-banner">🏆 إنجاز في الألعاب</div>}
+          {p.kind === 'game' && <div className="game-banner"><Icon name="trophy" /> إنجاز في الألعاب</div>}
 
           {p.body && <p className="post-body">{p.body}</p>}
           {p.image_path && (
@@ -156,7 +156,7 @@ export default function Team() {
               ))}
             </div>
             <button type="button" className="link" onClick={() => setOpen(p)}>
-              💬 {p.comments ? `${p.comments} تعليق` : 'علّق'}
+              <Icon name="chat" /> {p.comments ? `${p.comments} تعليق` : 'علّق'}
             </button>
           </footer>
         </article>
@@ -220,7 +220,7 @@ function Composer({ me, name, onPosted, onError }: { me: string; name: string; o
 
   const first = name.trim().split(/\s+/)[0]
   return (
-    <form className={`card composer${thanks ? ' thanks' : ''}`} onSubmit={submit}>
+    <form className={`card post-composer${thanks ? ' thanks' : ''}`} onSubmit={submit}>
       <div className="composer-row">
         <span className="avatar" style={avatarStyle(me)}>{initial(name)}</span>
         <textarea rows={text ? 3 : 1} value={text} onChange={(e) => setText(e.target.value)} maxLength={2000}
@@ -241,7 +241,7 @@ function Composer({ me, name, onPosted, onError }: { me: string; name: string; o
       )}
       <div className="composer-actions">
         <button type="button" className="link" onClick={() => input.current?.click()}><Icon name="image" /> صورة</button>
-        <button type="button" className={`link${thanks ? ' on' : ''}`} onClick={() => setThanks(!thanks)} aria-pressed={thanks}>🙏 شكر زميل</button>
+        <button type="button" className={`link${thanks ? ' on' : ''}`} onClick={() => setThanks(!thanks)} aria-pressed={thanks}><Icon name="thanks" /> شكر زميل</button>
         <button type="submit" disabled={busy}>{busy ? '…' : 'نشر'}</button>
       </div>
       <input ref={input} type="file" accept="image/*" hidden

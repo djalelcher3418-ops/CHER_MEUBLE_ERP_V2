@@ -183,9 +183,9 @@ export const BED_SIZES = ['90/190', '120/190', '140/190', '160/190', '180/200', 
 export const lineLabel = (description: string, size?: string | null) =>
   size ? (description ? `${description} — ${size}` : size) : description
 
-/** تفاصيل السطر: «قماش: قطيفة رمادي · أرجل: خشب» (فارغ إن لم يُحدَّدا) */
+/** تفاصيل السطر: «قماش: قطيفة رمادي، أرجل: خشب» (فارغ إن لم يُحدَّدا) */
 export const lineExtras = (fabric?: string | null, legs?: string | null) =>
-  [fabric && `قماش: ${fabric}`, legs && `أرجل: ${legs}`].filter(Boolean).join(' · ')
+  [fabric && `قماش: ${fabric}`, legs && `أرجل: ${legs}`].filter(Boolean).join('، ')
 
 /** ما يراه العامل: الطلبيات الجارية بدون مبالغ */
 export interface OrderPublic {
