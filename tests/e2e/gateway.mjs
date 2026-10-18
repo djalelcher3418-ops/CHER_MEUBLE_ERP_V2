@@ -11,6 +11,7 @@ export const sign = (claims) => { const h = b64({ alg: 'HS256', typ: 'JWT' }), p
 const verify = (t) => { try { const [h, p, s] = t.split('.'); if (crypto.createHmac('sha256', SECRET).update(`${h}.${p}`).digest('base64url') !== s) return null; return JSON.parse(Buffer.from(p, 'base64url')) } catch { return null } }
 const db = new pg.Pool({ host: process.argv[3], port: 5433, user: 'postgres', database: 'erp' })
 const files = new Map() // storage: path -> Buffer
+let lastClaude = null // آخر طلب وصل إلى Claude المزيّف (للتحقق في الاختبار)
 // supabase-js يرفع الصور كـ multipart/form-data: نحفظ جزء الملف فقط حتى تظهر الصورة فعلًا
 function filePart(buf, type = '') {
   const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(type)
@@ -27,7 +28,7 @@ function filePart(buf, type = '') {
   }
   return buf
 }
-const FN = { 'send-push': 8010, 'manage-users': 8011 }
+const FN = { 'send-push': 8010, 'manage-users': 8011, 'scan-invoice': 8012 }
 const log = fs.createWriteStream(process.argv[4] ?? 'gateway.log', { flags: 'a' })
 
 function session(u) {
@@ -53,6 +54,36 @@ http.createServer(async (req, res) => {
       log.write(`${req.method} ${decodeURIComponent(req.url)}\n`)
       return proxy(req, res, 3000, req.url.replace('/rest/v1', ''))
     }
+    // Claude مزيّف لدالة scan-invoice: يتحقق من شكل الطلب ويعيد فاتورة ثابتة
+    if (u.pathname === '/fake-anthropic/v1/messages' && req.method === 'POST') {
+      const b = JSON.parse((await body(req)).toString())
+      const text = b.messages?.[0]?.content?.find((c) => c.type === 'text')?.text ?? ''
+      lastClaude = {
+        key: req.headers['x-api-key'], beta: req.headers['anthropic-beta'], model: b.model, fallbacks: b.fallbacks,
+        format: b.output_config?.format?.type, effort: b.output_config?.effort,
+        image: b.messages?.[0]?.content?.some((c) => c.type === 'image' && c.source?.media_type === 'image/jpeg' && c.source.data.length > 100),
+        knowsSupplier: text.includes('مؤسسة الخشب'), knowsMaterial: text.includes('MDF 18 مم'), kind: text.includes('purchase invoice') ? 'purchase' : 'sale',
+      }
+      const nul = { party_phone: null, invoice_ref: null, discount: null, note: null }
+      const out = lastClaude.kind === 'purchase'
+        ? { ...nul, readable: true, party_name: 'Ets du Bois / مؤسسة الخشب', party_match: 'مؤسسة الخشب', invoice_date: '2026-10-12', invoice_ref: 'FA-2026/118',
+            lines: [
+              { description: 'Panneau MDF 18mm', qty: 4, unit: 'sheet', unit_price: 5200, line_total: 20800, match: 'MDF 18 مم' },
+              { description: 'Colle blanche vinylique 5kg', qty: 2, unit: 'box', unit_price: null, line_total: 3000, match: 'مادة غير موجودة' },
+            ],
+            total: 23800, note: 'الطابع الجبائي غير مكتوب بوضوح.' }
+        : { ...nul, readable: true, party_name: 'نادية قاسمي', party_phone: '0770 11 22 33', party_match: null, invoice_date: '2026-10-14',
+            lines: [
+              { description: 'Canapé d’angle velours', qty: 1, unit: 'piece', unit_price: 95000, line_total: 95000, match: null },
+              { description: 'Table basse', qty: 1, unit: 'piece', unit_price: null, line_total: 18000, match: null },
+            ],
+            discount: 3000, total: 110000 }
+      return send(res, 200, {
+        id: 'msg_e2e', type: 'message', role: 'assistant', model: b.model, stop_reason: 'end_turn', stop_sequence: null,
+        content: [{ type: 'text', text: JSON.stringify(out) }], usage: { input_tokens: 1500, output_tokens: 300 },
+      })
+    }
+    if (u.pathname === '/fake-anthropic/last') return send(res, 200, lastClaude)
     if (u.pathname.startsWith('/functions/v1/')) {
       const name = u.pathname.split('/')[3]
       if (!FN[name]) return send(res, 404, { error: 'no function' })

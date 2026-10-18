@@ -1,9 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Modal from '../components/Modal'
+import ScanInvoiceButton, { ScanSummary } from '../components/ScanInvoice'
+import { linePrice, phoneDigits, type InvoiceScan } from '../lib/invoiceScan'
 import { arabicError, dzd, num, supabase, todayISO } from '../lib/supabase'
-import { PAY_LABELS, UNIT_LABELS, type Material, type PayMethod, type PurchaseTotal, type Supplier } from '../lib/types'
+import { bestMatch } from '../lib/text'
+import { PAY_LABELS, UNIT_LABELS, type Material, type PayMethod, type PurchaseTotal, type Supplier, type Unit } from '../lib/types'
 
-type Line = { material_id: string; qty: string; unit_price: string }
+/** scanned: ما كُتب في الفاتورة المصوّرة لهذا السطر (للمراجعة وإضافة مادة جديدة) */
+type Line = { material_id: string; qty: string; unit_price: string; scanned?: { name: string; unit: Unit | null } }
 const emptyLine: Line = { material_id: '', qty: '', unit_price: '' }
 
 interface ItemRow {
@@ -118,12 +122,17 @@ export default function Purchases() {
   )
 }
 
-function NewPurchase({ suppliers, materials, onClose, onDone }: {
+function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials, onClose, onDone }: {
   suppliers: Supplier[]
   materials: Material[]
   onClose: () => void
   onDone: () => void
 }) {
+  // القوائم تكبر هنا إن أُضيف مورد أو مادة من الفاتورة المصوّرة
+  const [suppliers, setSuppliers] = useState(initialSuppliers)
+  const [materials, setMaterials] = useState(initialMaterials)
+  const [readInvoice, setReadInvoice] = useState<InvoiceScan | null>(null)
+  const [newSupplier, setNewSupplier] = useState<{ name: string; phone: string | null } | null>(null)
   const [supplierId, setSupplierId] = useState('')
   const [date, setDate] = useState(todayISO)
   const [ref, setRef] = useState('')
@@ -138,6 +147,48 @@ function NewPurchase({ suppliers, materials, onClose, onDone }: {
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)))
+  }
+
+  /** ملء النموذج بما قُرئ من صورة الفاتورة */
+  function applyScan(r: InvoiceScan) {
+    const sup = suppliers.find((x) => x.name === r.party_match) ?? bestMatch(r.party_name, suppliers)
+    if (sup) setSupplierId(String(sup.id))
+    setNewSupplier(!sup && r.party_name ? { name: r.party_name, phone: phoneDigits(r.party_phone) || null } : null)
+    if (r.invoice_date) setDate(r.invoice_date)
+    if (r.invoice_ref) setRef(r.invoice_ref)
+    const read = r.lines.map((l): Line => {
+      const m = materials.find((x) => x.name === l.match) ?? bestMatch(l.description, materials)
+      const price = linePrice(l)
+      return {
+        material_id: m ? String(m.id) : '',
+        qty: l.qty != null ? String(l.qty) : '',
+        unit_price: price != null ? String(price) : '',
+        scanned: { name: l.description, unit: l.unit },
+      }
+    })
+    setLines(read.length ? read : [{ ...emptyLine }])
+    setReadInvoice(r)
+    setError('')
+  }
+
+  async function addSupplier() {
+    if (!newSupplier) return
+    const { data, error } = await supabase.from('suppliers').insert({ name: newSupplier.name, phone: newSupplier.phone }).select('*').single()
+    if (error) return setError(arabicError(error))
+    const s = data as Supplier
+    setSuppliers([...suppliers, s].sort((a, b) => a.name.localeCompare(b.name, 'ar')))
+    setSupplierId(String(s.id))
+    setNewSupplier(null)
+  }
+
+  async function addMaterial(i: number) {
+    const sc = lines[i].scanned
+    if (!sc) return
+    const { data, error } = await supabase.from('materials').insert({ name: sc.name, unit: sc.unit ?? 'piece' }).select('*').single()
+    if (error) return setError(arabicError(error))
+    const m = data as Material
+    setMaterials([...materials, m].sort((a, b) => a.name.localeCompare(b.name, 'ar')))
+    setLines((ls) => ls.map((l, k) => (k === i ? { ...l, material_id: String(m.id) } : l)))
   }
 
   /** مسح باركود بقارئ USB: يضيف سطرًا للمادة */
@@ -189,6 +240,7 @@ function NewPurchase({ suppliers, materials, onClose, onDone }: {
 
   return (
     <Modal title="فاتورة شراء جديدة" onClose={onClose}>
+      <ScanInvoiceButton kind="purchase" onResult={applyScan} />
       <form className="form" onSubmit={submit}>
         <div className="grid3">
           <label>المورد
@@ -200,6 +252,12 @@ function NewPurchase({ suppliers, materials, onClose, onDone }: {
           <label>التاريخ<input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label>
           <label>رقم فاتورة المورد<input value={ref} onChange={(e) => setRef(e.target.value)} /></label>
         </div>
+        {newSupplier && !supplierId && (
+          <div className="scan-hint">
+            <span>المورد في الفاتورة: «{newSupplier.name}» غير موجود في القائمة.</span>
+            <button type="button" className="secondary" onClick={addSupplier}>إضافته كمورد جديد</button>
+          </div>
+        )}
       </form>
 
       <form className="scan-row" onSubmit={addByBarcode}>
@@ -216,12 +274,20 @@ function NewPurchase({ suppliers, materials, onClose, onDone }: {
                 const m = materials.find((x) => String(x.id) === l.material_id)
                 return (
                   <tr key={i}>
-                    <td>
-                      <select value={l.material_id} onChange={(e) => setLine(i, { material_id: e.target.value })}>
+                    <td><div className="mat-cell">
+                      <select value={l.material_id} onChange={(e) => setLine(i, { material_id: e.target.value })} aria-label="المادة">
                         <option value="">— اختر —</option>
                         {materials.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                       </select>
-                    </td>
+                      {l.scanned && (
+                        <small className="scanned-as">
+                          في الفاتورة: «{l.scanned.name}»
+                          {!l.material_id && (
+                            <button type="button" className="link" onClick={() => addMaterial(i)}>+ مادة جديدة بهذا الاسم</button>
+                          )}
+                        </small>
+                      )}
+                    </div></td>
                     <td><input type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} placeholder={m ? UNIT_LABELS[m.unit] : ''} /></td>
                     <td><input type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
                     <td>{dzd((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</td>
@@ -235,6 +301,7 @@ function NewPurchase({ suppliers, materials, onClose, onDone }: {
         <button type="button" className="secondary" onClick={() => setLines([...lines, { ...emptyLine }])}>+ سطر</button>
 
         <p className="total">المجموع: {dzd(total)}</p>
+        {readInvoice && <ScanSummary scan={readInvoice} computed={total} />}
 
         <div className="grid3">
           <label>المدفوع الآن (اتركه فارغًا إن كان كله دَينًا)

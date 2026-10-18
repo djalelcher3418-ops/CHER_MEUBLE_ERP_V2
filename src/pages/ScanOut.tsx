@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import { useAuth } from '../lib/auth'
+import { fold } from '../lib/text'
 import { arabicError, dateTime, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
 
@@ -18,9 +19,6 @@ interface MyMove {
 
 const READER_ID = 'barcode-reader'
 
-/** بحث بدون اعتبار الهمزات والتاء المربوطة والحروف الكبيرة: «اسفنج» يجد «إسفنج» */
-const fold = (t: string) =>
-  t.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\u064B-\u0652]/g, '').trim()
 const matches = (m: MaterialPublic, q: string) => {
   const f = fold(q)
   return !f || fold(`${m.name} ${m.category ?? ''}`).includes(f) || m.barcode.includes(q.trim())

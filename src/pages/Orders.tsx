@@ -20,6 +20,9 @@ import {
 } from '../lib/types'
 import Icon from '../components/Icon'
 import PhotoStrip from '../components/PhotoStrip'
+import ScanInvoiceButton, { ScanSummary } from '../components/ScanInvoice'
+import { linePrice, phoneDigits, type InvoiceScan } from '../lib/invoiceScan'
+import { bestMatch } from '../lib/text'
 import { addOrderPhoto, loadOrderPhotos, trackUrl, type OrderPhoto } from '../lib/orderPhotos'
 import { orderMessage, waLink } from '../lib/whatsapp'
 import { CustomerPaymentModal } from './Customers'
@@ -428,7 +431,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
   )
 }
 
-function OrderForm({ customers, order, items, quote = false, onClose, onDone }: {
+function OrderForm({ customers: initialCustomers, order, items, quote = false, onClose, onDone }: {
   customers: Customer[]
   order?: Order
   items?: OrderItem[]
@@ -436,6 +439,10 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
   onClose: () => void
   onDone: (id: number) => void
 }) {
+  // تكبر القائمة إن أُضيف زبون من الفاتورة المصوّرة
+  const [customers, setCustomers] = useState(initialCustomers)
+  const [readInvoice, setReadInvoice] = useState<InvoiceScan | null>(null)
+  const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string | null } | null>(null)
   const [customerId, setCustomerId] = useState(order ? String(order.customer_id) : '')
   const [title, setTitle] = useState(order?.title ?? '')
   const [orderDate, setOrderDate] = useState(order?.order_date ?? todayISO())
@@ -474,6 +481,36 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)))
+  }
+
+  /** ملء النموذج بما قُرئ من صورة فاتورة أو طلب الزبون */
+  function applyScan(r: InvoiceScan) {
+    const phone = phoneDigits(r.party_phone)
+    const c = customers.find((x) => x.name === r.party_match)
+      ?? (phone.length >= 9 ? customers.find((x) => phoneDigits(x.phone) === phone) : undefined)
+      ?? bestMatch(r.party_name, customers)
+    if (c) setCustomerId(String(c.id))
+    setNewCustomer(!c && r.party_name ? { name: r.party_name, phone: phone || null } : null)
+    if (r.invoice_date) setOrderDate(r.invoice_date)
+    if (!title.trim() && r.lines[0]) setTitle(r.lines.length > 1 ? `${r.lines[0].description} وغيرها` : r.lines[0].description)
+    if (r.discount) setDiscount(String(r.discount))
+    const read = r.lines.map((l): Line => {
+      const price = linePrice(l)
+      return { ...emptyLine, description: l.description, qty: l.qty != null ? String(l.qty) : '1', unit_price: price != null ? String(price) : '' }
+    })
+    if (read.length) setLines(read)
+    setReadInvoice(r)
+    setError('')
+  }
+
+  async function addCustomer() {
+    if (!newCustomer) return
+    const { data, error } = await supabase.from('customers').insert({ name: newCustomer.name, phone: newCustomer.phone }).select('*').single()
+    if (error) return setError(arabicError(error))
+    const c = data as Customer
+    setCustomers([...customers, c].sort((a, b) => a.name.localeCompare(b.name, 'ar')))
+    setCustomerId(String(c.id))
+    setNewCustomer(null)
   }
 
   async function submit(e: FormEvent) {
@@ -540,6 +577,7 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
       title={order ? `تعديل ${quote ? 'عرض السعر' : 'الطلبية'} رقم ${order.id}` : quote ? 'عرض سعر جديد' : 'طلبية جديدة'}
       onClose={onClose}
     >
+      {!order && <ScanInvoiceButton kind="sale" onResult={applyScan} />}
       <form className="form" onSubmit={submit}>
         <div className="grid3">
           <label>الزبون
@@ -551,6 +589,12 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
           <label>تاريخ الطلب<input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} required /></label>
           <label>موعد التسليم<input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></label>
         </div>
+        {newCustomer && !customerId && (
+          <div className="scan-hint">
+            <span>الزبون في الفاتورة: «{newCustomer.name}»{newCustomer.phone ? ` (${newCustomer.phone})` : ''} غير موجود في القائمة.</span>
+            <button type="button" className="secondary" onClick={addCustomer}>إضافته كزبون جديد</button>
+          </div>
+        )}
         <label>الطلبية<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="غرفة نوم كاملة، سرير 160×200 بلوح رأس مبطّن…" required /></label>
 
         <div className="table-wrap">
@@ -597,6 +641,7 @@ function OrderForm({ customers, order, items, quote = false, onClose, onDone }: 
           <div className="stat-inline">المجموع: {dzd(subtotal)}</div>
           <div className="stat-inline total">الصافي: {dzd(total)}</div>
         </div>
+        {readInvoice && <ScanSummary scan={readInvoice} computed={total} />}
         {ignored > 0 && <p className="error">{ignored === 1 ? 'سطر واحد ناقص' : `${ignored} أسطر ناقصة`} (بلا بيان أو بلا كمية) ولن يُحفظ ولا يدخل في المجموع.</p>}
 
         {!order && !quote && (
