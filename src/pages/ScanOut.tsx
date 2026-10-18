@@ -5,6 +5,7 @@ import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import { useAuth } from '../lib/auth'
 import { fold } from '../lib/text'
+import { cacheGet, cacheSet, dropOut, enqueueOut, isOffline, newRef, onQueueChange, pendingOuts, sendOut, syncOuts, type PendingOut } from '../lib/offline'
 import { arabicError, dateTime, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
 
@@ -41,6 +42,9 @@ export default function ScanOut() {
   // نافذة اختيار المادة يدويًا من القائمة (بدون باركود)
   const [picking, setPicking] = useState(false)
   const [search, setSearch] = useState('')
+  // بدون إنترنت: نعمل بآخر قائمة محفوظة، والحركات تنتظر في الهاتف
+  const [offline, setOffline] = useState(false)
+  const [pending, setPending] = useState<PendingOut[]>(pendingOuts)
 
   async function load() {
     const [m, r, o] = await Promise.all([
@@ -54,12 +58,27 @@ export default function ScanOut() {
         .limit(15),
       supabase.from('orders_public').select('*').order('due_date', { ascending: true, nullsFirst: false }),
     ])
+    if (m.error && isOffline(m.error)) {
+      setOffline(true)
+      setMaterials(cacheGet<MaterialPublic[]>('materials') ?? [])
+      setOrders(cacheGet<OrderPublic[]>('orders') ?? [])
+      return
+    }
+    setOffline(false)
     setMaterials((m.data as MaterialPublic[]) ?? [])
     setOrders((o.data as OrderPublic[]) ?? [])
     setRecent((r.data as MyMove[]) ?? [])
+    cacheSet('materials', m.data ?? [])
+    cacheSet('orders', o.data ?? [])
   }
   useEffect(() => {
-    load()
+    syncOuts().finally(load)
+    const unsub = onQueueChange(() => setPending(pendingOuts()))
+    const back = () => { syncOuts().finally(load) }
+    const gone = () => setOffline(true)
+    window.addEventListener('online', back)
+    window.addEventListener('offline', gone)
+    return () => { unsub(); window.removeEventListener('online', back); window.removeEventListener('offline', gone) }
   }, [])
 
   function choose(m: MaterialPublic) {
@@ -138,21 +157,33 @@ export default function ScanOut() {
       if (!isAdmin) return setMsg({ ok: false, text: `الكمية أكبر من الموجود في المخزون (${num(have)} ${UNIT_LABELS[found.unit]}). أخبر المدير.` })
       if (!confirm(`الموجود ${num(have)} فقط. إخراج ${num(q)} سيجعل المخزون بالسالب. متابعة؟`)) return
     }
-    const { error } = await supabase.from('stock_movements').insert({
+    const move = {
+      client_ref: newRef(),
       material_id: found.id,
-      type: 'out',
       qty: q,
       note: note.trim() || null,
       order_id: orderId ? Number(orderId) : null,
       created_by: session!.user.id,
-    })
-    if (error) return setMsg({ ok: false, text: arabicError(error) })
-    setMsg({ ok: true, text: `تم إخراج ${num(q)} ${UNIT_LABELS[found.unit]} من «${found.name}»` })
+    }
+    const error = navigator.onLine === false ? new Error('offline') : await sendOut(move)
+    if (error && isOffline(error)) {
+      // يُحفظ في الهاتف ويُرسل وحده عند عودة الإنترنت
+      enqueueOut({ ...move, at: new Date().toISOString(), name: found.name, unit_label: UNIT_LABELS[found.unit] })
+      const left = materials.map((m) => (m.id === found.id ? { ...m, qty: Number(m.qty) - q } : m))
+      setMaterials(left)
+      cacheSet('materials', left)
+      setOffline(true)
+      setMsg({ ok: true, text: `بدون إنترنت: سُجّل إخراج ${num(q)} ${UNIT_LABELS[found.unit]} من «${found.name}» في الهاتف، ويُرسل وحده عند عودة الإنترنت.` })
+    } else if (error) {
+      return setMsg({ ok: false, text: arabicError(error) })
+    } else {
+      setMsg({ ok: true, text: `تم إخراج ${num(q)} ${UNIT_LABELS[found.unit]} من «${found.name}»` })
+    }
     setFound(null)
     setCode('')
     setQty('')
     setNote('')
-    load()
+    if (!error) load()
   }
 
   const shown = materials.filter((m) => matches(m, search))
@@ -162,6 +193,30 @@ export default function ScanOut() {
   return (
     <div className="scan-page">
       <h2>إخراج مواد إلى الورشة</h2>
+      {offline && (
+        <p className="offline-bar" role="status">
+          بدون إنترنت. يمكنك الإخراج كالعادة: يُحفظ في الهاتف ويُرسل وحده عند عودة الإنترنت.
+        </p>
+      )}
+      {pending.length > 0 && (
+        <section className="card pending">
+          <h3>في انتظار الإرسال ({pending.length})</h3>
+          <ul className="list">
+            {pending.map((p) => (
+              <li key={p.client_ref}>
+                <span>
+                  {p.name} — {num(p.qty)} {p.unit_label}
+                  {p.error && <small className="neg" style={{ display: 'block' }}>رفضه الخادم: {arabicError(p.error)}</small>}
+                </span>
+                {p.error
+                  ? <button className="link danger" onClick={() => confirm('حذف هذه الحركة من الهاتف؟') && dropOut(p.client_ref)}>حذف</button>
+                  : <span className="muted">{new Date(p.at).toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit' })}</span>}
+              </li>
+            ))}
+          </ul>
+          {!offline && <button className="secondary" onClick={() => syncOuts().finally(load)}>إرسال الآن</button>}
+        </section>
+      )}
       {orderId && orders.find((o) => String(o.id) === orderId) && (
         <p className="card">المواد ستُسجَّل للطلبية: <strong>{orderOf(Number(orderId))}</strong></p>
       )}

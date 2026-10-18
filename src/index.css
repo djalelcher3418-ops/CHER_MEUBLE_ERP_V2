@@ -600,3 +600,67 @@ a.btn.secondary-link { background: var(--brand-soft); color: var(--brand); }
 .invoice-photo .thumb { padding: 0; min-height: 0; overflow: hidden; display: grid; place-items: center; }
 .invoice-photo .thumb img { border: 0; border-radius: 0; }
 .invoice-photo .link svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.9; }
+
+/* المرحلة 17: الإسناد، المواد اللازمة، الكتالوج */
+.mine-tag { display: inline-block; padding: 0 8px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; }
+.needs li > span:first-child { display: flex; flex-direction: column; }
+.need-state { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: var(--ok-soft); color: var(--ok); white-space: nowrap; }
+.need-short .need-state { background: var(--danger-soft); color: var(--danger); }
+.need-tight .need-state { background: var(--warn-soft); color: var(--warn); }
+.need-done .need-state { background: var(--surface-2); color: var(--muted); }
+.stat small { font-size: 12px; }
+.share-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.share-row > span { display: flex; flex-direction: column; }
+.share-row .toolbar { margin: 0; }
+.products { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.product { display: flex; gap: 12px; margin: 0; }
+.product-photo { width: 96px; height: 96px; flex: none; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); }
+.product-photo img { width: 100%; height: 100%; object-fit: cover; }
+.product-photo svg, .product-photo-edit svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.product-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.product-body h3 { margin: 0; font-size: 16px; }
+.product-price { margin: 2px 0; font-size: 18px; font-weight: 700; }
+.product-body .toolbar { margin: 4px 0 0; }
+.product-photo-edit { display: flex; align-items: center; gap: 12px; }
+.product-photo-edit img, .product-photo-edit > span { width: 88px; height: 88px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); display: grid; place-items: center; }
+.pick-product { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; }
+.pick-thumb { width: 44px; height: 44px; flex: none; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.pick-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.shop { max-width: 760px; }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.shop-item { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 0 0 12px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; text-align: start; white-space: normal; font-weight: 400; }
+.shop-item > * { margin-inline: 12px; }
+.shop-item .shop-photo { margin: 0; aspect-ratio: 4 / 3; background: var(--surface-2); }
+.shop-item .shop-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shop-item .size-tag { align-self: flex-start; margin-inline-start: 12px; }
+.shop-name { font-weight: 700; }
+.shop-big { width: 100%; max-height: 50vh; object-fit: contain; border-radius: var(--radius-sm); background: var(--surface-2); }
+
+/* الرسوم البيانية (التقرير) — ألوان مفحوصة بأداة dataviz للوضعين */
+:root { --chart-in: #0b8a68; --chart-out: #c8692a; }
+@media (prefers-color-scheme: dark) { :root { --chart-in: #25a07f; --chart-out: #cf7a39; } }
+.charts { display: flex; flex-direction: column; gap: 14px; }
+.chart { margin: 0; }
+.chart figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin-bottom: 4px; font-size: 14px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.key-in { background: var(--chart-in); }
+.key-out { background: repeating-linear-gradient(45deg, var(--chart-out) 0 3px, var(--surface) 3px 4.5px); }
+.chart-svg { width: 100%; height: auto; display: block; touch-action: pan-y; }
+.chart-svg .bar-in { fill: var(--chart-in); }
+.chart-svg .bar-out { fill: var(--chart-out); }
+.chart-hatch { stroke: var(--surface); stroke-width: 1.5; }
+.chart-svg .dim { opacity: .35; }
+.chart-svg g { transition: opacity .15s; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-base { stroke: var(--muted); stroke-width: 1; }
+.chart-tick { fill: var(--muted); font-size: 10px; font-family: var(--font); }
+.chart-tick.on { fill: var(--text); font-weight: 700; }
+.chart-value { fill: var(--text); font-size: 10px; font-weight: 700; font-family: var(--font); }
+.chart-tip { margin: 0; min-height: 22px; font-size: 14px; }
+.chart-table summary { cursor: pointer; color: var(--brand); font-weight: 600; font-size: 14px; }
+
+/* بدون إنترنت */
+.offline-bar { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--graphite); color: var(--graphite-ink); border-inline-start: 6px solid var(--accent); font-size: 14px; }
+.pending { border-inline-start: 6px solid var(--accent); }

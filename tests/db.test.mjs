@@ -580,6 +580,64 @@ let workerUpload = false; try { await q(`insert into storage.objects (bucket_id,
 ok(workerUpload, 'a worker cannot upload into the purchase photos')
 ok((await db.query(`delete from storage.objects where bucket_id = 'purchases'`)).affectedRows === 0, 'a worker cannot delete invoice photos')
 
+// --- phase 17: catalog, material needs, shortages, assignment, extra costs, offline refs
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/017_catalog_planning.sql', 'utf8'))
+await db.exec(fs.readFileSync(R + '/supabase/017_catalog_planning.sql', 'utf8'))
+let old016 = ''; try { await db.exec(fs.readFileSync(R + '/supabase/016_purchase_photo.sql', 'utf8')) } catch (e) { old016 = e.message }
+ok(old016.includes('شُغّل من قبل'), 'running the older 016 again after 017 is refused')
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 17, 'schema version is 17')
+const [mdfRow] = await q(`select id, qty from materials where id = 1`)
+const [foam] = await q(`insert into materials (name, unit, avg_cost) values ('إسفنج 20 كثافة', 'sheet', 3000) returning id`)
+const [bedP] = await q(`insert into products (name, price, size) values ('سرير أمير', 65000, '160/190') returning id`)
+await q(`insert into product_materials values (${bedP.id}, 1, 2), (${bedP.id}, ${foam.id}, 1.5)`)
+const CAT = (await q(`select save_order(null, '{"customer_id":1,"title":"سريران","order_date":"2026-10-18"}', '[{"description":"سرير أمير","qty":2,"unit_price":65000,"product_id":${bedP.id}},{"description":"كومودينو","qty":1,"unit_price":9000}]') as id`))[0].id
+ok((await q(`select product_id from order_items where order_id = ${CAT} order by id`)).map((r) => r.product_id).join() === `${bedP.id},`, 'an order line remembers the catalog product it came from')
+let badProduct = (await q(`select save_order(null, '{"customer_id":1,"title":"x","order_date":"2026-10-18"}', '[{"description":"x","qty":1,"unit_price":1,"product_id":999999}]') as id`))[0].id
+ok((await q(`select product_id from order_items where order_id = ${badProduct}`))[0].product_id === null, 'an unknown product id is ignored, not trusted')
+await q(`insert into order_material_plan values (${CAT}, ${foam.id}, 0.5)`)
+const needs = await q(`select * from order_material_needs where order_id = ${CAT} order by material_id`)
+ok(needs.length === 2 && Number(needs[0].needed) === 4 && Number(needs[1].needed) === 3.5 && needs[1].manual === true, 'needs = recipe × quantity (2 beds × 2 sheets MDF; 2 × 1.5 foam + 0.5 added by hand)')
+await q(`insert into stock_movements (material_id, type, qty, order_id) values (1, 'out', 1, ${CAT})`)
+const n2 = await q(`select taken, remaining from order_material_needs where order_id = ${CAT} and material_id = 1`)
+ok(Number(n2[0].taken) === 1 && Number(n2[0].remaining) === 3, 'what was already taken out for the order is subtracted')
+const sh = await q(`select * from material_shortages order by material_id`)
+const foamShort = sh.find((r) => r.material_id === foam.id)
+ok(foamShort && Number(foamShort.short) === 3.5 && Number(foamShort.est_cost) === 10500 && foamShort.orders === 1, 'the shopping list shows the missing foam (3.5 sheets, about 10 500 DZD)')
+await q(`update orders set is_quote = true where id = ${CAT}`)
+ok(!(await q(`select * from material_shortages`)).some((r) => r.material_id === foam.id), 'quotes do not reserve materials')
+await q(`update orders set is_quote = false where id = ${CAT}`)
+await q(`insert into order_costs (order_id, description, amount) values (${CAT}, 'نقل', 4000), (${CAT}, 'تنجيد خارجي', 6000)`)
+const ot = (await q(`select total, extra_cost, assigned_to from order_totals where id = ${CAT}`))[0]
+ok(Number(ot.extra_cost) === 10000 && Number(ot.total) === 139000, 'extra costs (transport, outside work) are added up per order')
+let badCost = false; try { await q(`insert into order_costs (order_id, description, amount) values (${CAT}, 'x', -5)`) } catch { badCost = true }
+ok(badCost, 'a negative cost is refused')
+await q(`update orders set assigned_to = '${WORKER}' where id = ${CAT}`)
+await as(WORKER)
+const myJob = (await q(`select assigned_to, assigned_name from orders_public where id = ${CAT}`))[0]
+ok(myJob?.assigned_to === WORKER && myJob.assigned_name === 'عامل', 'the workshop board shows who the order is assigned to')
+ok((await q(`select * from order_costs`)).length === 0 && (await q(`select * from product_materials`)).length === 0, 'workers see neither order costs nor product recipes')
+ok((await q(`select * from products`)).length >= 1, 'workers can see the catalog products')
+let assignChanged = false; try { await q(`update orders set assigned_to = null where id = ${CAT}`); assignChanged = (await q(`select assigned_to from orders_public where id = ${CAT}`))[0].assigned_to === null } catch { assignChanged = false }
+ok(!assignChanged, 'a worker cannot change the assignment')
+const ref = '11111111-2222-3333-4444-555555555555'
+await q(`insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (1, 'out', 0.5, ${CAT}, '${WORKER}', '${ref}') on conflict (client_ref) do nothing`)
+await q(`insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (1, 'out', 0.5, ${CAT}, '${WORKER}', '${ref}') on conflict (client_ref) do nothing`)
+await as(ADMIN)
+ok((await q(`select count(*)::int n from stock_movements where client_ref = '${ref}'`))[0].n === 1, 'an offline movement sent twice is recorded once')
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+const pubCat = (await q(`select catalog_public() as c`))[0].c
+ok(pubCat.length >= 1 && pubCat[0].name && pubCat[0].price !== undefined && pubCat[0].materials === undefined, 'the public catalog lists products and prices, without recipes')
+let anonCosts = false; try { const r = await q(`select * from order_costs`); anonCosts = r.length === 0 } catch { anonCosts = true }
+ok(anonCosts, 'an anonymous visitor sees no order costs')
+await db.exec('reset role')
+await q(`update products set public = false where id = ${bedP.id}`)
+await db.exec(`select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+ok(!(await q(`select catalog_public() as c`))[0].c.some((p) => p.id === bedP.id), 'a product hidden from customers is not in the public catalog')
+await db.exec('reset role')
+await q(`update products set public = true where id = ${bedP.id}`)
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

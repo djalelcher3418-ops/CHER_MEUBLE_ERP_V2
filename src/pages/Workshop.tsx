@@ -30,7 +30,9 @@ export default function Workshop() {
   const [busy, setBusy] = useState<number | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
+  const [mineOnly, setMineOnly] = useState(false)
   const navigate = useNavigate()
+  const me = session?.user.id
   const today = todayISO()
 
   async function load() {
@@ -71,9 +73,16 @@ export default function Workshop() {
       </div>
       {error && <p className="error">{error}</p>}
       {loaded && !jobs.length && <p className="muted">لا توجد طلبيات جارية الآن.</p>}
+      {jobs.some((j) => j.assigned_to === me) && (
+        <div className="mini-seg" style={{ marginBottom: 12, width: 'fit-content' }}>
+          <button type="button" className={!mineOnly ? 'on' : ''} onClick={() => setMineOnly(false)}>كل الطلبيات</button>
+          <button type="button" className={mineOnly ? 'on' : ''} onClick={() => setMineOnly(true)}>المُسندة إليّ ({jobs.filter((j) => j.assigned_to === me).length})</button>
+        </div>
+      )}
 
       <div className="jobs">
-        {jobs.map((j) => {
+        {[...jobs].sort((a, b) => Number(b.assigned_to === me) - Number(a.assigned_to === me))
+          .filter((j) => !mineOnly || j.assigned_to === me).map((j) => {
           const late = !!j.due_date && j.due_date < today
           const lines = items.filter((i) => i.order_id === j.id)
           return (
@@ -83,6 +92,9 @@ export default function Workshop() {
                 <span className={`status st-${j.status}`}>{ORDER_STATUS_LABELS[j.status]}</span>
               </div>
               <div className="muted meta-line">
+                {j.assigned_to && (j.assigned_to === me
+                  ? <span className="mine-tag">لك</span>
+                  : <span>المسؤول: {j.assigned_name}</span>)}
                 <span>{j.customer_name}</span>
                 <span>التسليم: <span className={late ? 'neg' : ''}>{j.due_date ?? 'بدون موعد'}{late ? ' (متأخرة)' : ''}</span></span>
               </div>

@@ -10,6 +10,7 @@
 //   { "order_id": 45 }          → تنبيه للمدير بأن طلبية بدأت أو أصبحت جاهزة
 //   { "post_id": 7 }            → منشور جديد في صفحة الفريق (أو شكر زميل) لكل الفريق
 //   { "comment_id": 9 }         → تعليق جديد لصاحب المنشور
+//   { "assigned_order_id": 12 } → المدير أسند طلبية لعامل: تنبيه لذلك العامل
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.49.4'
 import webpush from 'npm:web-push@3.6.7'
@@ -121,6 +122,17 @@ Deno.serve(async (req) => {
       body: text ? (text.length > 140 ? text.slice(0, 140) + '…' : text) : '📷 صورة',
       url: '/team',
       tag: `post-${p.id}`,
+    }
+  } else if (input.assigned_order_id) {
+    if (me.role !== 'admin') return json({ error: 'admin only' }, 403)
+    const { data: o } = await db.from('orders').select('id, title, assigned_to, due_date').eq('id', input.assigned_order_id).maybeSingle()
+    if (!o?.assigned_to) return json({ sent: 0, reason: 'not assigned' })
+    recipients = active.filter((x) => x.id === o.assigned_to && x.id !== me.id).map((x) => x.id)
+    payload = {
+      title: '🔨 طلبية أُسندت إليك',
+      body: `${o.id} — ${o.title}${o.due_date ? ` (التسليم ${o.due_date})` : ''}`,
+      url: '/workshop',
+      tag: `assigned-${o.id}`,
     }
   } else if (input.comment_id) {
     const { data: c } = await db

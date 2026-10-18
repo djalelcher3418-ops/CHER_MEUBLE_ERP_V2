@@ -14,6 +14,9 @@ const Accounts = lazy(() => import('./pages/Accounts'))
 const Status = lazy(() => import('./pages/Status'))
 const Track = lazy(() => import('./pages/Track'))
 const Chat = lazy(() => import('./pages/Chat'))
+const Catalog = lazy(() => import('./pages/Catalog'))
+const Shop = lazy(() => import('./pages/Shop'))
+const Shopping = lazy(() => import('./pages/Shopping'))
 const Customers = lazy(() => import('./pages/Customers'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Employees = lazy(() => import('./pages/Employees'))
@@ -41,6 +44,8 @@ const ADMIN_TABS: Tab[] = [
 ]
 const ADMIN_MORE: Tab[] = [
   { to: '/customers', label: 'الزبائن', icon: 'customers' },
+  { to: '/catalog', label: 'الكتالوج', icon: 'catalog' },
+  { to: '/shopping', label: 'قائمة الشراء', icon: 'cart' },
   { to: '/materials', label: 'المواد', icon: 'materials' },
   { to: '/scan', label: 'إخراج مواد', icon: 'scan' },
   { to: '/purchases', label: 'المشتريات', icon: 'purchases' },
@@ -81,6 +86,20 @@ export default function App() {
     if (myId && 'Notification' in window && Notification.permission === 'granted') enablePush(false)
   }, [myId])
 
+  // حركات إخراج سُجّلت بدون إنترنت: تُرسل عند فتح التطبيق وعند عودة الشبكة
+  useEffect(() => {
+    if (!myId) return
+    const sync = () => { import('./lib/offline').then((o) => o.syncOuts()).catch(() => {}) }
+    sync()
+    window.addEventListener('online', sync)
+    return () => window.removeEventListener('online', sync)
+  }, [myId])
+
+  // نسخة احتياطية أسبوعية تلقائية عند دخول المدير (لا شيء إن كانت آخر نسخة حديثة)
+  useEffect(() => {
+    if (myId && isAdmin) import('./lib/backup').then((b) => b.autoBackup()).catch(() => {})
+  }, [myId, isAdmin])
+
   async function logout() {
     if (!confirm('تسجيل الخروج؟')) return
     await forgetPush()
@@ -100,7 +119,13 @@ export default function App() {
       </div>
     )
 
-  // صفحة تتبع الطلبية للزبون: عامة، بدون دخول
+  // صفحات عامة للزبون بدون دخول: تتبع الطلبية والكتالوج
+  if (location.pathname === '/catalogue')
+    return (
+      <Suspense fallback={<Loading />}>
+        <Shop />
+      </Suspense>
+    )
   if (location.pathname.startsWith('/track/'))
     return (
       <Suspense fallback={<Loading />}>
@@ -157,6 +182,8 @@ export default function App() {
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/invoice/:id" element={<Invoice />} />
                 <Route path="/materials" element={<Materials />} />
+                <Route path="/catalog" element={<Catalog />} />
+                <Route path="/shopping" element={<Shopping />} />
                 <Route path="/purchases" element={<Purchases />} />
                 <Route path="/suppliers" element={<Suppliers />} />
                 <Route path="/employees" element={<Employees />} />

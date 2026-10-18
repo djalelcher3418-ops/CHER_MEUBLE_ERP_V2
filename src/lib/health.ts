@@ -53,6 +53,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p16', label: 'صورة فاتورة المورد مع الشراء', fix: 'شغّل supabase/016_purchase_photo.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 16,
   },
+  {
+    key: 'p17', label: 'الكتالوج، المواد اللازمة، الإسناد، الأرباح، النسخ', fix: 'شغّل supabase/017_catalog_planning.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 17,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */
@@ -75,11 +79,12 @@ async function functionStatus(name: string, body: Record<string, unknown>, deplo
 
 /** فحص الخدمات: دوال الخادم ومكان حفظ الصور */
 export async function checkServices(): Promise<Check[]> {
-  const [push, users, bucket, scan] = await Promise.all([
+  const [push, users, bucket, scan, backup] = await Promise.all([
     functionStatus('send-push', { action: 'public-key' }, []),
     functionStatus('manage-users', { action: 'ping' }, [400, 403]),
     supabase.storage.from('chat').list('', { limit: 1 }),
     supabase.functions.invoke('scan-invoice', { body: { action: 'ping' } }),
+    functionStatus('backup', { action: 'ping' }, []),
   ])
   const scanInfo = scan.data as { key?: boolean; provider?: string | null } | null
   const scanKey = !scan.error && !!scanInfo?.key
@@ -91,6 +96,7 @@ export async function checkServices(): Promise<Check[]> {
       fix: scan.error ? 'انشر supabase/functions/scan-invoice (انظر README)' : 'أضف السرّ GEMINI_API_KEY (أو ANTHROPIC_API_KEY) في Supabase → Edge Functions → Secrets',
       ok: scanKey,
     },
+    { key: 'f4', label: 'النسخ الاحتياطية الأسبوعية backup', fix: 'انشر supabase/functions/backup (انظر README)', ok: backup },
     { key: 's1', label: 'مكان حفظ صور الرسائل', fix: 'شغّل supabase/005_messages.sql', ok: !bucket.error, detail: bucket.error?.message },
   ]
 }

@@ -8,6 +8,9 @@ do $$ begin
   if erp_schema_version() < 15 then
     raise exception 'شغّل الملف 015_tetris.sql أولًا ثم أعد تشغيل هذا الملف';
   end if;
+  if erp_schema_version() > 16 then
+    raise exception 'هذا الملف شُغّل من قبل وقاعدة البيانات أحدث منه — لا حاجة لتشغيله';
+  end if;
 end $$;
 
 alter table purchases add column if not exists invoice_photo text check (invoice_photo is null or length(invoice_photo) <= 200);

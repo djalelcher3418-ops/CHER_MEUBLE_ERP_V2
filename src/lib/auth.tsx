@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { isOffline } from './offline'
 import { supabase } from './supabase'
 import type { Profile } from './types'
 
@@ -41,8 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('id, full_name, role, phone, active')
       .eq('id', session.user.id)
       .single()
-      .then(({ data }) => {
-        setProfile((data as Profile) ?? null)
+      .then(({ data, error }) => {
+        const key = 'cm-profile-' + session.user.id
+        let p = (data as Profile) ?? null
+        try {
+          // بدون إنترنت: نستعمل آخر بيانات حساب محفوظة حتى يفتح التطبيق في الورشة
+          if (p) localStorage.setItem(key, JSON.stringify(p))
+          else if (error && isOffline(error)) p = JSON.parse(localStorage.getItem(key) ?? 'null')
+        } catch { /* تخزين محلي غير متاح */ }
+        setProfile(p)
         setLoading(false)
       })
   }, [session?.user.id])

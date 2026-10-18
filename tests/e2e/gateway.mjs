@@ -11,6 +11,7 @@ export const sign = (claims) => { const h = b64({ alg: 'HS256', typ: 'JWT' }), p
 const verify = (t) => { try { const [h, p, s] = t.split('.'); if (crypto.createHmac('sha256', SECRET).update(`${h}.${p}`).digest('base64url') !== s) return null; return JSON.parse(Buffer.from(p, 'base64url')) } catch { return null } }
 const db = new pg.Pool({ host: process.argv[3], port: 5433, user: 'postgres', database: 'erp' })
 const files = new Map() // storage: path -> Buffer
+const fileTimes = new Map() // storage: path -> وقت الرفع
 let lastClaude = null // آخر طلب وصل إلى Claude المزيّف (للتحقق في الاختبار)
 let lastGemini = null
 /** الفاتورة الثابتة التي «يقرؤها» النموذج المزيّف */
@@ -46,8 +47,8 @@ function filePart(buf, type = '') {
   }
   return buf
 }
-const FN = { 'send-push': 8010, 'manage-users': 8011, 'scan-invoice': 8012 }
-const log = fs.createWriteStream(process.argv[4] ?? 'gateway.log', { flags: 'a' })
+const FN = { 'send-push': 8010, 'manage-users': 8011, 'scan-invoice': 8012, backup: 8014 }
+const log = fs.createWriteStream(process.argv[4] ?? 'gateway.log', { flags: 'w' })
 
 function session(u) {
   const exp = Math.floor(Date.now() / 1000) + 3600
@@ -60,7 +61,17 @@ const send = (res, code, obj, headers = {}) => { res.writeHead(code, { 'content-
 async function proxy(req, res, port, pathOut) {
   const raw = await body(req)
   const headers = { ...req.headers }; delete headers.host
-  const up = http.request({ host: '127.0.0.1', port, path: pathOut, method: req.method, headers }, (r) => { res.writeHead(r.statusCode, r.headers); r.pipe(res) })
+  const up = http.request({ host: '127.0.0.1', port, path: pathOut, method: req.method, headers }, (r) => {
+    // استدعاءات الدوال تُسجَّل مع جسمها وحالتها (للتشخيص)
+    res.writeHead(r.statusCode, r.headers)
+    if (port === 3000) return r.pipe(res)
+    const chunks = []
+    r.on('data', (c) => { chunks.push(c); res.write(c) })
+    r.on('end', () => {
+      log.write(`FN ${req.url} ${r.statusCode} ${raw.toString().slice(0, 120)} -> ${Buffer.concat(chunks).toString().slice(0, 160)}\n`)
+      res.end()
+    })
+  })
   up.on('error', (e) => send(res, 502, { message: 'upstream ' + e.message }))
   up.end(raw)
 }
@@ -149,7 +160,16 @@ http.createServer(async (req, res) => {
     }
     if (u.pathname.startsWith('/storage/v1/object/')) {
       const rest = u.pathname.replace('/storage/v1/object/', '')
-      if (rest.startsWith('list/')) return send(res, 200, [])
+      // قائمة الملفات في مخزن (للنسخ الاحتياطية): الأحدث أولًا
+      if (rest.startsWith('list/')) {
+        const bucket = rest.split('/')[1]
+        const b = JSON.parse((await body(req)).toString() || '{}')
+        const prefix = `${bucket}/${b.prefix ? b.prefix.replace(/\/$/, '') + '/' : ''}`
+        const out = [...files.entries()].filter(([k]) => k.startsWith(prefix) && !k.slice(prefix.length).includes('/'))
+          .map(([k, v]) => ({ name: k.slice(prefix.length), created_at: fileTimes.get(k), metadata: { size: v.length } }))
+          .sort((a, c) => (a.name < c.name ? 1 : -1))
+        return send(res, 200, out)
+      }
       // مخازن متعددة (chat و orders): المفتاح = <bucket>/<path>
       if (rest.startsWith('sign/') && req.method === 'POST') {
         const bucket = rest.split('/')[1]
@@ -157,7 +177,19 @@ http.createServer(async (req, res) => {
         return send(res, 200, (b.paths ?? []).map((p) => ({ path: p, signedURL: `/object/sign/${bucket}/${p}?token=t` /* مثل Supabase: المسار بعد /storage/v1 */, error: null })))
       }
       if (rest.startsWith('sign/') && req.method === 'GET') { const f = files.get(rest.replace(/^sign\//, '')); res.writeHead(f ? 200 : 404, { 'content-type': 'image/jpeg' }); return res.end(f ?? '') }
-      if (req.method === 'POST') { files.set(rest, filePart(await body(req), req.headers['content-type'])); return send(res, 200, { Key: rest }) }
+      if (req.method === 'POST') { files.set(rest, filePart(await body(req), req.headers['content-type'])); fileTimes.set(rest, new Date().toISOString()); return send(res, 200, { Key: rest }) }
+      // روابط عامة (صور منتجات الكتالوج)
+      if (req.method === 'GET' && rest.startsWith('public/')) {
+        const f = files.get(rest.replace(/^public\//, ''))
+        res.writeHead(f ? 200 : 404, { 'content-type': 'image/jpeg' })
+        return res.end(f ?? '')
+      }
+      // تنزيل ملف بالحساب (النسخ الاحتياطية)
+      if (req.method === 'GET' && !rest.startsWith('sign/') && !rest.startsWith('public/')) {
+        const f = files.get(rest.replace(/^authenticated\//, ''))
+        res.writeHead(f ? 200 : 404, { 'content-type': rest.endsWith('.json') ? 'application/json' : 'application/octet-stream' })
+        return res.end(f ?? '')
+      }
       if (req.method === 'DELETE') return send(res, 200, [])
     }
     if (u.pathname.startsWith('/realtime/')) { res.writeHead(404); return res.end() }

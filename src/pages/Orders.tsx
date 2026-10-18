@@ -11,6 +11,8 @@ import {
   lineLabel,
   type Customer,
   type CustomerPayment,
+  type MaterialNeed,
+  type Product,
   type Order,
   type OrderItem,
   type OrderStatus,
@@ -19,17 +21,20 @@ import {
   type Unit,
 } from '../lib/types'
 import Icon from '../components/Icon'
+import { AssignWorker, MaterialNeeds, ProfitPanel } from '../components/OrderPlanning'
 import PhotoStrip from '../components/PhotoStrip'
 import ScanInvoiceButton, { ScanSummary } from '../components/ScanInvoice'
 import { linePrice, phoneDigits, type InvoiceScan } from '../lib/invoiceScan'
-import { bestMatch } from '../lib/text'
+import { bestMatch, fold } from '../lib/text'
+import { productPhotoUrl } from '../lib/catalog'
 import { addOrderPhoto, loadOrderPhotos, trackUrl, type OrderPhoto } from '../lib/orderPhotos'
 import { orderMessage, waLink } from '../lib/whatsapp'
 import { CustomerPaymentModal } from './Customers'
 
 /** size: مقاس من القائمة أو مقاس آخر يُكتب يدويًا (custom) */
-type Line = { description: string; qty: string; unit_price: string; size: string; custom: boolean; fabric: string; legs: string }
-const emptyLine: Line = { description: '', qty: '1', unit_price: '', size: '', custom: false, fabric: '', legs: '' }
+/** product_id: إن جاء السطر من الكتالوج (لحساب المواد اللازمة) */
+type Line = { description: string; qty: string; unit_price: string; size: string; custom: boolean; fabric: string; legs: string; product_id: number | null }
+const emptyLine: Line = { description: '', qty: '1', unit_price: '', size: '', custom: false, fabric: '', legs: '', product_id: null }
 const OTHER_SIZE = '__other__'
 /** إن تُرك البيان فارغًا واختير مقاس: «سرير» أو «أريكة» */
 const lineDescription = (l: Line) => l.description.trim() || (l.size === 'أريكة' ? 'أريكة' : l.size.trim() ? 'سرير' : '')
@@ -55,6 +60,8 @@ interface Detail {
   events: EventRow[]
   token: string | null
   photos: OrderPhoto[]
+  needs: MaterialNeed[]
+  short: Set<number>
 }
 
 interface EventRow {
@@ -92,7 +99,7 @@ export default function Orders() {
   }
 
   async function openDetail(id: number) {
-    const [o, i, p, m, raw, ev, tk, photos] = await Promise.all([
+    const [o, i, p, m, raw, ev, tk, photos, nd, sh] = await Promise.all([
       supabase.from('order_totals').select('*').eq('id', id).single(),
       supabase.from('order_items').select('*').eq('order_id', id).order('id'),
       supabase.from('customer_payments').select('*').eq('order_id', id).order('paid_on'),
@@ -107,6 +114,9 @@ export default function Orders() {
       // رابط التتبع والصور (المرحلة 10): لا تعطّل التفاصيل إن لم يُشغَّل ملفها بعد
       supabase.from('orders').select('track_token').eq('id', id).maybeSingle(),
       loadOrderPhotos([id]).catch(() => [] as OrderPhoto[]),
+      // المواد اللازمة والنقص (المرحلة 17)
+      supabase.from('order_material_needs').select('*').eq('order_id', id).order('name'),
+      supabase.from('material_shortages').select('material_id'),
     ])
     if (o.error) return setError(arabicError(o.error))
     setDetail({
@@ -119,6 +129,8 @@ export default function Orders() {
       events: (ev.data as unknown as EventRow[]) ?? [],
       token: tk.error ? null : ((tk.data as { track_token: string } | null)?.track_token ?? null),
       photos,
+      needs: nd.error ? [] : ((nd.data as MaterialNeed[]) ?? []),
+      short: new Set(sh.error ? [] : ((sh.data as { material_id: number }[]) ?? []).map((r) => r.material_id)),
     })
   }
 
@@ -324,6 +336,7 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
               {Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          <AssignWorker o={o} onChanged={onReload} />
         </div>
       )}
       {o.delivered_on && <p className="muted">سُلّمت يوم {o.delivered_on}</p>}
@@ -356,7 +369,8 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
         {!quote && <div className="stat"><span>الباقي</span><strong className={rest(o) > 0 ? 'neg' : ''}>{dzd(rest(o))}</strong></div>}
       </div>
 
-      {!quote && (
+      {!quote && o.extra_cost !== undefined && <ProfitPanel o={o} needs={d.needs} onChanged={onReload} />}
+      {!quote && o.extra_cost === undefined && (
         <>
           <div className="stats">
             <div className="stat"><span>تكلفة المواد المُخرَجة</span><strong>{dzd(o.material_cost)}</strong></div>
@@ -364,6 +378,9 @@ function OrderDetail({ d, today, onStatus, onPay, onEdit, onInvoice, onDelete, o
           </div>
           <p className="muted">الربح = الصافي ناقص تكلفة المواد التي أُخرجت لهذه الطلبية. لا يشمل أجور العمال والمصاريف الأخرى.</p>
         </>
+      )}
+      {o.extra_cost !== undefined && o.status !== 'delivered' && o.status !== 'cancelled' && (
+        <MaterialNeeds orderId={o.id} needs={d.needs} short={d.short} onChanged={onReload} />
       )}
 
       <h4>الصور (التصميم، المقاسات، القطعة الجاهزة)</h4>
@@ -442,6 +459,7 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
   // تكبر القائمة إن أُضيف زبون من الفاتورة المصوّرة
   const [customers, setCustomers] = useState(initialCustomers)
   const [readInvoice, setReadInvoice] = useState<InvoiceScan | null>(null)
+  const [picking, setPicking] = useState(false)
   const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string | null } | null>(null)
   const [customerId, setCustomerId] = useState(order ? String(order.customer_id) : '')
   const [title, setTitle] = useState(order?.title ?? '')
@@ -459,6 +477,7 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
           custom: !!i.size && !(BED_SIZES as readonly string[]).includes(i.size),
           fabric: i.fabric ?? '',
           legs: i.legs ?? '',
+          product_id: i.product_id ?? null,
         }))
       : [{ ...emptyLine }],
   )
@@ -481,6 +500,18 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)))
+  }
+
+  /** سطر من الكتالوج: الاسم والسعر والمقاس والقماش والأرجل، ومكوّناته تُحسب في المواد اللازمة */
+  function addProduct(p: Product) {
+    setPicking(false)
+    const line: Line = {
+      ...emptyLine, description: p.name, qty: '1', unit_price: String(p.price), size: p.size ?? '',
+      custom: !!p.size && !(BED_SIZES as readonly string[]).includes(p.size), fabric: p.fabric ?? '', legs: p.legs ?? '', product_id: p.id,
+    }
+    const blank = lines.findIndex((l) => !l.description.trim() && !l.unit_price && !l.size)
+    setLines(blank >= 0 ? lines.map((l, k) => (k === blank ? line : l)) : [...lines, line])
+    if (!title.trim()) setTitle(p.name)
   }
 
   /** ملء النموذج بما قُرئ من صورة فاتورة أو طلب الزبون */
@@ -539,6 +570,7 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
         size: l.size.trim(),
         fabric: l.fabric.trim(),
         legs: l.legs.trim(),
+        ...(l.product_id ? { product_id: l.product_id } : {}),
         qty: Number(l.qty),
         unit_price: Number(l.unit_price) || 0,
       })),
@@ -634,7 +666,11 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
             </tbody>
           </table>
         </div>
-        <button type="button" className="secondary" onClick={() => setLines([...lines, { ...emptyLine }])}>+ سطر</button>
+        <div className="toolbar">
+          <button type="button" className="secondary" onClick={() => setLines([...lines, { ...emptyLine }])}>+ سطر</button>
+          <button type="button" className="secondary" onClick={() => setPicking(true)}>+ من الكتالوج</button>
+        </div>
+        {picking && <ProductPicker onClose={() => setPicking(false)} onPick={addProduct} />}
 
         <div className="grid3">
           <label>التخفيض<input type="number" step="any" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} /></label>
@@ -682,6 +718,40 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : quote ? 'حفظ عرض السعر' : 'حفظ الطلبية'}</button>
       </form>
+    </Modal>
+  )
+}
+
+/** اختيار منتج من الكتالوج عند إنشاء الطلبية */
+function ProductPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: Product) => void }) {
+  const [items, setItems] = useState<Product[] | null>(null)
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    supabase.from('products').select('*').eq('active', true).order('name').then(({ data, error }) => setItems(error ? [] : ((data as Product[]) ?? [])))
+  }, [])
+  const shown = (items ?? []).filter((p) => !q.trim() || fold(`${p.name} ${p.size ?? ''} ${p.fabric ?? ''}`).includes(fold(q)))
+  return (
+    <Modal title="اختر من الكتالوج" onClose={onClose}>
+      <input type="search" className="pick-search" placeholder="ابحث بالاسم أو المقاس…" aria-label="بحث في الكتالوج" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      {items === null ? <p className="muted">…</p> : (
+        <ul className="pick-list">
+          {shown.map((p) => {
+            const url = productPhotoUrl(p.photo_path)
+            return (
+              <li key={p.id}>
+                <button type="button" className="pick-item" onClick={() => onPick(p)}>
+                  <span className="pick-product">
+                    <span className="pick-thumb">{url ? <img src={url} alt="" /> : null}</span>
+                    <span><strong>{p.name}</strong><small className="muted">{[p.size, p.fabric].filter(Boolean).join('، ')}</small></span>
+                  </span>
+                  <span>{dzd(p.price)}</span>
+                </button>
+              </li>
+            )
+          })}
+          {!shown.length && <li className="muted center">{items.length ? 'لا يوجد منتج بهذا الاسم' : 'الكتالوج فارغ. أضف منتجاتك من «المزيد ← الكتالوج».'}</li>}
+        </ul>
+      )}
     </Modal>
   )
 }

@@ -161,6 +161,10 @@ export interface OrderTotal {
   material_cost: number
   /** عرض سعر لم يُحوَّل بعد إلى طلبية (المرحلة 11) */
   is_quote?: boolean
+  /** تكاليف إضافية للطلبية (المرحلة 17) */
+  extra_cost?: number
+  /** العامل المسؤول (المرحلة 17) */
+  assigned_to?: string | null
 }
 
 export interface OrderItem {
@@ -174,6 +178,8 @@ export interface OrderItem {
   /** نوع القماش ونوع الأرجل (المرحلة 13) */
   fabric?: string | null
   legs?: string | null
+  /** المنتج من الكتالوج (المرحلة 17) */
+  product_id?: number | null
 }
 
 /** مقاسات الأسرّة المعتادة في الورشة */
@@ -194,6 +200,9 @@ export interface OrderPublic {
   customer_name: string
   due_date: string | null
   status: OrderStatus
+  /** العامل المسؤول (المرحلة 17) */
+  assigned_to?: string | null
+  assigned_name?: string | null
 }
 
 export interface CustomerPayment {
@@ -261,4 +270,59 @@ export interface Expense {
   spent_on: string
   description: string | null
   method: PayMethod
+}
+
+/** منتج في الكتالوج (المرحلة 17) */
+export interface Product {
+  id: number
+  name: string
+  description: string | null
+  price: number
+  size: string | null
+  fabric: string | null
+  legs: string | null
+  photo_path: string | null
+  public: boolean
+  active: boolean
+}
+
+/** مكوّن من مكوّنات المنتج: كمية مادة لقطعة واحدة */
+export interface ProductMaterial {
+  product_id: number
+  material_id: number
+  qty: number
+}
+
+/** المواد اللازمة لطلبية مقارنة بما أُخرج وبالمخزون */
+export interface MaterialNeed {
+  order_id: number
+  material_id: number
+  name: string
+  unit: Unit
+  needed: number
+  taken: number
+  remaining: number
+  stock: number
+  avg_cost: number
+  manual: boolean
+}
+
+/** سطر في قائمة الشراء: ما ينقص للطلبيات المفتوحة */
+export interface MaterialShortage {
+  material_id: number
+  name: string
+  unit: Unit
+  stock: number
+  reserved: number
+  short: number
+  est_cost: number
+  orders: number
+}
+
+export interface OrderCost {
+  id: number
+  order_id: number
+  description: string
+  amount: number
+  spent_on: string
 }

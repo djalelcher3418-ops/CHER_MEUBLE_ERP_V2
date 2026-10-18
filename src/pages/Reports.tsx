@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { monthRange, thisMonth } from '../lib/payroll'
+import TrendCharts, { type MonthPoint } from '../components/TrendCharts'
+import { MONTHS, monthRange, thisMonth } from '../lib/payroll'
 import { arabicError, dzd, supabase, todayISO } from '../lib/supabase'
 import type { OrderTotal } from '../lib/types'
 
@@ -36,6 +37,25 @@ export default function Reports() {
   const [d, setD] = useState<Data | null>(null)
   const [error, setError] = useState('')
   const [exporting, setExporting] = useState<'' | 'month' | 'backup'>('')
+  const [trend, setTrend] = useState<MonthPoint[] | null>(null)
+
+  // آخر 6 أشهر حتى الشهر المختار، للرسوم
+  useEffect(() => {
+    const [y, m] = month.split('-').map(Number)
+    const months = Array.from({ length: 6 }, (_, k) => {
+      const d = new Date(y, m - 6 + k, 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    })
+    Promise.all(months.map((mm) => { const r = monthRange(mm); return supabase.rpc('month_summary', { p_from: r.from, p_to: r.to }) }))
+      .then((res) => setTrend(res.map((r, k) => {
+        const s = (r.data ?? {}) as Partial<MonthSummary>
+        return {
+          label: MONTHS[Number(months[k].slice(5)) - 1],
+          received: Number(s.received ?? 0),
+          spent: Number(s.suppliers ?? 0) + Number(s.payroll ?? 0) + Number(s.advances ?? 0) + Number(s.expenses ?? 0),
+        }
+      })))
+  }, [month])
 
   async function runExport(kind: 'month' | 'backup') {
     setExporting(kind)
@@ -87,6 +107,12 @@ export default function Reports() {
         <button className="secondary" onClick={() => runExport('backup')} disabled={!!exporting}>{exporting === 'backup' ? 'جارٍ التحضير…' : 'نسخة احتياطية كاملة (Excel)'}</button>
       </div>
       {error && <p className="error">{error}</p>}
+      {trend && (
+        <section className="card">
+          <h3>آخر 6 أشهر</h3>
+          <TrendCharts data={trend} />
+        </section>
+      )}
       {!d ? <p className="muted">جارٍ التحميل…</p> : <ReportBody d={d} label={label} />}
     </div>
   )
@@ -96,7 +122,7 @@ function ReportBody({ d, label }: { d: Data; label: string }) {
   const out = d.suppliers + d.payroll + d.advances + d.expenses
   const cash = d.received - out
   const sales = sum(d.delivered, (o) => Number(o.total))
-  const matCost = sum(d.delivered, (o) => Number(o.material_cost))
+  const matCost = sum(d.delivered, (o) => Number(o.material_cost) + Number(o.extra_cost ?? 0))
   const wages = d.payroll + d.advances
   const result = sales - matCost - wages - d.expenses
 
@@ -118,7 +144,7 @@ function ReportBody({ d, label }: { d: Data; label: string }) {
         <h3>نتيجة الطلبيات المسلّمة — {label}</h3>
         <ul className="list">
           <li><span>مبيعات الطلبيات المسلّمة ({d.delivered.length})</span><strong>{dzd(sales)}</strong></li>
-          <li><span>تكلفة موادها</span><strong>− {dzd(matCost)}</strong></li>
+          <li><span>تكلفة موادها وتكاليفها الأخرى</span><strong>− {dzd(matCost)}</strong></li>
           <li><span>أجور الشهر (رواتب + تسبيقات)</span><strong>− {dzd(wages)}</strong></li>
           <li><span>مصاريف عامة</span><strong>− {dzd(d.expenses)}</strong></li>
           <li className="net"><span>الربح التقريبي</span><strong className={result < 0 ? 'neg' : 'pos'}>{dzd(result)}</strong></li>
@@ -147,10 +173,10 @@ function ReportBody({ d, label }: { d: Data; label: string }) {
         <h3>الطلبيات المسلّمة</h3>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>رقم</th><th>التسليم</th><th>الزبون</th><th>الطلبية</th><th>المبلغ</th><th>المواد</th><th>الفرق</th></tr></thead>
+            <thead><tr><th>رقم</th><th>التسليم</th><th>الزبون</th><th>الطلبية</th><th>المبلغ</th><th>المواد</th><th>تكاليف أخرى</th><th>الربح</th><th>النسبة</th></tr></thead>
             <tbody>
               {d.delivered.map((o) => {
-                const p = Number(o.total) - Number(o.material_cost)
+                const p = Number(o.total) - Number(o.material_cost) - Number(o.extra_cost ?? 0)
                 return (
                   <tr key={o.id}>
                     <td><Link to={`/orders?open=${o.id}`}>{o.id}</Link></td>
@@ -159,11 +185,13 @@ function ReportBody({ d, label }: { d: Data; label: string }) {
                     <td>{o.title}</td>
                     <td>{dzd(o.total)}</td>
                     <td>{dzd(o.material_cost)}</td>
+                    <td>{dzd(o.extra_cost ?? 0)}</td>
                     <td className={p < 0 ? 'neg' : 'pos'}>{dzd(p)}</td>
+                    <td className={p < 0 ? 'neg' : ''}>{Number(o.total) > 0 ? `${Math.round((p / Number(o.total)) * 100)}%` : '—'}</td>
                   </tr>
                 )
               })}
-              {!d.delivered.length && <tr><td colSpan={7} className="muted center">لم تُسلَّم أي طلبية في هذا الشهر</td></tr>}
+              {!d.delivered.length && <tr><td colSpan={9} className="muted center">لم تُسلَّم أي طلبية في هذا الشهر</td></tr>}
             </tbody>
           </table>
         </div>
