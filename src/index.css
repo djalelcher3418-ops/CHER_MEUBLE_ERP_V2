@@ -592,3 +592,11 @@ a.btn.secondary-link { background: var(--brand-soft); color: var(--brand); }
 .scan-summary.warn { background: var(--warn-soft); color: var(--warn); border-inline-start-color: var(--accent); }
 .mat-cell { display: flex; flex-direction: column; gap: 2px; min-width: 160px; }
 @media (max-width: 700px) { .table-wrap td > .mat-cell { flex: 1; max-width: 72%; } }
+
+/* صورة فاتورة المورد مع الشراء */
+.invoice-photo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--radius-sm); background: var(--surface-2); margin: 10px 0; }
+.invoice-photo > span { display: flex; flex-direction: column; flex: 1; min-width: 120px; }
+.invoice-photo img, .invoice-photo .thumb { width: 64px; height: 84px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); }
+.invoice-photo .thumb { padding: 0; min-height: 0; overflow: hidden; display: grid; place-items: center; }
+.invoice-photo .thumb img { border: 0; border-radius: 0; }
+.invoice-photo .link svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.9; }

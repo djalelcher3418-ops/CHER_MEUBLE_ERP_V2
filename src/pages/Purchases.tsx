@@ -1,7 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import ScanInvoiceButton, { ScanSummary } from '../components/ScanInvoice'
+import { signedUrls } from '../lib/chat'
 import { linePrice, phoneDigits, type InvoiceScan } from '../lib/invoiceScan'
+import { removePurchasePhoto, savePurchasePhoto } from '../lib/purchasePhoto'
 import { arabicError, dzd, num, supabase, todayISO } from '../lib/supabase'
 import { bestMatch } from '../lib/text'
 import { PAY_LABELS, UNIT_LABELS, type Material, type PayMethod, type PurchaseTotal, type Supplier, type Unit } from '../lib/types'
@@ -22,7 +25,7 @@ export default function Purchases() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
   const [creating, setCreating] = useState(false)
-  const [detail, setDetail] = useState<{ p: PurchaseTotal; items: ItemRow[] } | null>(null)
+  const [detail, setDetail] = useState<{ p: PurchaseTotal; items: ItemRow[]; photo: string | null } | null>(null)
   const [error, setError] = useState('')
 
   async function load() {
@@ -43,14 +46,20 @@ export default function Purchases() {
   const supName = (id: number | null) => suppliers.find((s) => s.id === id)?.name ?? '—'
 
   async function openDetail(p: PurchaseTotal) {
-    const { data } = await supabase.from('purchase_items').select('id, qty, unit_price, materials(name, unit)').eq('purchase_id', p.id)
-    setDetail({ p, items: (data as unknown as ItemRow[]) ?? [] })
+    const [{ data }, ph] = await Promise.all([
+      supabase.from('purchase_items').select('id, qty, unit_price, materials(name, unit)').eq('purchase_id', p.id),
+      // قبل تشغيل 016 لا يوجد العمود: نتجاهل الخطأ ونخفي الصورة
+      supabase.from('purchases').select('invoice_photo').eq('id', p.id).maybeSingle(),
+    ])
+    const photo = ph.error ? null : ((ph.data as { invoice_photo: string | null } | null)?.invoice_photo ?? null)
+    setDetail({ p, items: (data as unknown as ItemRow[]) ?? [], photo })
   }
 
   async function remove(p: PurchaseTotal) {
     if (!confirm(`حذف الشراء رقم ${p.id}؟ ستُنقص كمياته من المخزون. الدفعات المرتبطة به تبقى في حساب المورد.`)) return
     const { error } = await supabase.from('purchases').delete().eq('id', p.id)
     if (error) return setError(arabicError(error))
+    if (detail?.photo) removePurchasePhoto(detail.photo)
     setDetail(null)
     load()
   }
@@ -115,6 +124,7 @@ export default function Purchases() {
             </table>
           </div>
           <p>المجموع: <strong>{dzd(detail.p.total)}</strong> — المدفوع: {dzd(detail.p.paid)}</p>
+          <InvoicePhoto purchaseId={detail.p.id} path={detail.photo} onChanged={(photo) => setDetail({ ...detail, photo })} />
           <button className="danger" onClick={() => remove(detail.p)}>حذف هذا الشراء</button>
         </Modal>
       )}
@@ -133,6 +143,11 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
   const [materials, setMaterials] = useState(initialMaterials)
   const [readInvoice, setReadInvoice] = useState<InvoiceScan | null>(null)
   const [newSupplier, setNewSupplier] = useState<{ name: string; phone: string | null } | null>(null)
+  // صورة الفاتورة: تُحفظ مع الشراء (من التصوير أو مرفقة يدويًا)
+  const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
+  const pickPhoto = (file: File) => setPhoto({ file, url: URL.createObjectURL(file) })
   const [supplierId, setSupplierId] = useState('')
   const [date, setDate] = useState(todayISO)
   const [ref, setRef] = useState('')
@@ -150,7 +165,8 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
   }
 
   /** ملء النموذج بما قُرئ من صورة الفاتورة */
-  function applyScan(r: InvoiceScan) {
+  function applyScan(r: InvoiceScan, file: File) {
+    pickPhoto(file)
     const sup = suppliers.find((x) => x.name === r.party_match) ?? bestMatch(r.party_name, suppliers)
     if (sup) setSupplierId(String(sup.id))
     setNewSupplier(!sup && r.party_name ? { name: r.party_name, phone: phoneDigits(r.party_phone) || null } : null)
@@ -235,6 +251,13 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
       })
       if (pay.error) { setBusy(false); return setError('حُفظ الشراء لكن الدفعة لم تُحفظ: ' + arabicError(pay.error)) }
     }
+    if (photo) {
+      try {
+        await savePurchasePhoto(purchaseId, photo.file)
+      } catch (err) {
+        alert(`حُفظ الشراء رقم ${purchaseId}، لكن صورة الفاتورة لم تُرفع (${arabicError(err)}). يمكنك إضافتها من تفاصيل الشراء.`)
+      }
+    }
     onDone()
   }
 
@@ -300,6 +323,23 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
         </div>
         <button type="button" className="secondary" onClick={() => setLines([...lines, { ...emptyLine }])}>+ سطر</button>
 
+        <div className="invoice-photo">
+          {photo ? (
+            <>
+              <img src={photo.url} alt="صورة فاتورة المورد" />
+              <span>
+                <strong>صورة الفاتورة</strong>
+                <small className="muted">تُحفظ مع الشراء</small>
+              </span>
+              <button type="button" className="link danger" onClick={() => setPhoto(null)}>إزالة</button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={() => photoInput.current?.click()}><Icon name="image" /> إرفاق صورة الفاتورة</button>
+          )}
+          <input ref={photoInput} type="file" accept="image/*" hidden aria-label="صورة الفاتورة"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) pickPhoto(f); e.target.value = '' }} />
+        </div>
+
         <p className="total">المجموع: {dzd(total)}</p>
         {readInvoice && <ScanSummary scan={readInvoice} computed={total} />}
 
@@ -319,5 +359,55 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
         <button type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ الشراء'}</button>
       </form>
     </Modal>
+  )
+}
+
+/** صورة فاتورة المورد في تفاصيل الشراء: عرض، تكبير، إضافة أو تغيير */
+function InvoicePhoto({ purchaseId, path, onChanged }: { purchaseId: number; path: string | null; onChanged: (path: string) => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [view, setView] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let alive = true
+    if (path) signedUrls([path], 'purchases').then((m) => { if (alive) setUrl(m.get(path) ?? null) })
+    return () => { alive = false }
+  }, [path])
+
+  async function upload(file: File | undefined) {
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      onChanged(await savePurchasePhoto(purchaseId, file, path))
+    } catch (e) {
+      setError(arabicError(e))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="invoice-photo">
+      {path && (url ? (
+        <button type="button" className="thumb" onClick={() => setView(true)} aria-label="تكبير صورة الفاتورة"><img src={url} alt="صورة فاتورة المورد" /></button>
+      ) : <span className="thumb muted">…</span>)}
+      <span>
+        <strong>صورة الفاتورة</strong>
+        <small className="muted">{path ? 'اضغط على الصورة لتكبيرها' : 'لا توجد صورة لهذا الشراء'}</small>
+      </span>
+      <button type="button" className="secondary" disabled={busy} onClick={() => input.current?.click()}>
+        <Icon name="camera" /> {busy ? '…' : path ? 'تغيير' : 'إضافة صورة'}
+      </button>
+      <input ref={input} type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
+      {error && <p className="error">{error}</p>}
+      {view && url && (
+        <div className="viewer" onClick={() => setView(false)}>
+          <img src={url} alt="" />
+          <button className="icon-btn" aria-label="إغلاق"><Icon name="close" /></button>
+        </div>
+      )}
+    </div>
   )
 }

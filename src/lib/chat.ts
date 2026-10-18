@@ -63,7 +63,7 @@ const fresh = (key: string) => {
 }
 
 /** روابط مؤقتة (ساعة) لعرض الصور الخاصة (صور الدردشة أو صور منشورات الفريق) */
-export async function signedUrls(paths: string[], bucket: 'chat' | 'team' = 'chat'): Promise<Map<string, string>> {
+export async function signedUrls(paths: string[], bucket: 'chat' | 'team' | 'purchases' = 'chat'): Promise<Map<string, string>> {
   const key = (p: string) => `${bucket}:${p}`
   const missing = paths.filter((p) => !fresh(key(p)))
   if (missing.length) {

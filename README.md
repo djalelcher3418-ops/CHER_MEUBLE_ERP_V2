@@ -119,6 +119,8 @@
 - لا يُحفظ شيء تلقائيًا: النموذج يمتلئ، تراجع، ثم تضغط «حفظ». ويظهر تنبيه إن كان مجموع الفاتورة لا يساوي مجموع الأسطر
 - للمدير فقط. التكلفة على حساب صاحب المفتاح: Gemini له حصة مجانية محدودة، وClaude تقريبًا بضعة سنتات (دولار) لكل فاتورة
 
+- صورة فاتورة المورد تُحفظ مع الشراء تلقائيًا عند التصوير (أو «إرفاق صورة الفاتورة» يدويًا)، وتظهر في تفاصيل الشراء مع «تغيير / إضافة صورة». لا يراها إلا المدير (يتطلب `016_purchase_photo.sql`)
+
 ### تفعيل قراءة الفواتير (مرة واحدة)
 1. مفتاح واحد يكفي، أحدهما:
    - **Gemini**: من https://aistudio.google.com → Get API key، ثم في Supabase → Edge Functions → **Secrets** أضف `GEMINI_API_KEY` = المفتاح (يبدأ بـ `AIza`)
@@ -132,7 +134,7 @@
 
 ## قاعدة البيانات
 - `supabase/001_phase1.sql` (مُشغَّل مسبقًا على Supabase).
-- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql` ثم `014_team_social.sql` ثم `015_tetris.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
+- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql` ثم `014_team_social.sql` ثم `015_tetris.sql` ثم `016_purchase_photo.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
 
 ## التشغيل على الكمبيوتر
 ```

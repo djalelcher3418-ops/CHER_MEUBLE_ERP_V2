@@ -8,6 +8,9 @@ do $$ begin
   if erp_schema_version() < 14 then
     raise exception 'شغّل الملف 014_team_social.sql أولًا ثم أعد تشغيل هذا الملف';
   end if;
+  if erp_schema_version() > 15 then
+    raise exception 'هذا الملف شُغّل من قبل وقاعدة البيانات أحدث منه — لا حاجة لتشغيله';
+  end if;
 end $$;
 
 alter table game_scores drop constraint if exists game_scores_game_check;

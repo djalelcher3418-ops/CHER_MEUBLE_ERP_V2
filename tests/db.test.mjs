@@ -562,6 +562,24 @@ let bigTetris = false; try { await q(`select submit_game_score('tetris', 200001)
 ok(bigTetris, 'an impossible Tetris score is refused')
 ok((await q(`select * from game_leaderboard('tetris')`))[0].best === 12400, 'Tetris has its own leaderboard')
 
+// --- phase 16: invoice photo on purchases
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/016_purchase_photo.sql', 'utf8'))
+await db.exec(fs.readFileSync(R + '/supabase/016_purchase_photo.sql', 'utf8'))
+let old015 = ''; try { await db.exec(fs.readFileSync(R + '/supabase/015_tetris.sql', 'utf8')) } catch (e) { old015 = e.message }
+ok(old015.includes('شُغّل من قبل'), 'running the older 015 again after 016 is refused')
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 16, 'schema version is 16')
+await q(`update purchases set invoice_photo = '1/facture.jpg' where id = 1`)
+ok((await q(`select invoice_photo from purchases where id = 1`))[0].invoice_photo === '1/facture.jpg', 'a purchase keeps the path of its invoice photo')
+await q(`insert into storage.objects (bucket_id, name) values ('purchases', '1/facture.jpg')`)
+ok((await q(`select * from storage.objects where bucket_id = 'purchases'`)).length === 1, 'the manager sees the invoice photos')
+await as(WORKER)
+ok((await q(`select * from storage.objects where bucket_id = 'purchases'`)).length === 0, 'a worker cannot see supplier invoice photos')
+let workerUpload = false; try { await q(`insert into storage.objects (bucket_id, name) values ('purchases', '1/x.jpg')`) } catch { workerUpload = true }
+ok(workerUpload, 'a worker cannot upload into the purchase photos')
+ok((await db.query(`delete from storage.objects where bucket_id = 'purchases'`)).affectedRows === 0, 'a worker cannot delete invoice photos')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

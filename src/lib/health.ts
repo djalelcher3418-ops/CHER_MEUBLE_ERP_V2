@@ -49,6 +49,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p15', label: 'لعبة تتريس', fix: 'شغّل supabase/015_tetris.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 15,
   },
+  {
+    key: 'p16', label: 'صورة فاتورة المورد مع الشراء', fix: 'شغّل supabase/016_purchase_photo.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 16,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */

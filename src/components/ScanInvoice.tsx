@@ -3,7 +3,7 @@ import { scanInvoice, type InvoiceScan, type ScanKind } from '../lib/invoiceScan
 import Icon from './Icon'
 
 /** زر «تصوير فاتورة»: يفتح الكاميرا أو المعرض، ويعيد ما قُرئ من الصورة */
-export default function ScanInvoiceButton({ kind, onResult }: { kind: ScanKind; onResult: (s: InvoiceScan) => void }) {
+export default function ScanInvoiceButton({ kind, onResult }: { kind: ScanKind; onResult: (s: InvoiceScan, file: File) => void }) {
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -13,7 +13,7 @@ export default function ScanInvoiceButton({ kind, onResult }: { kind: ScanKind; 
     setBusy(true)
     setError('')
     try {
-      onResult(await scanInvoice(file, kind))
+      onResult(await scanInvoice(file, kind), file)
     } catch (e) {
       setError((e as Error).message)
     }
