@@ -77,13 +77,14 @@ export async function checkServices(): Promise<Check[]> {
     supabase.storage.from('chat').list('', { limit: 1 }),
     supabase.functions.invoke('scan-invoice', { body: { action: 'ping' } }),
   ])
-  const scanKey = !scan.error && !!(scan.data as { key?: boolean } | null)?.key
+  const scanInfo = scan.data as { key?: boolean; provider?: string | null } | null
+  const scanKey = !scan.error && !!scanInfo?.key
   return [
     { key: 'f1', label: 'دالة التنبيهات send-push', fix: 'انشر supabase/functions/send-push (انظر README)', ok: push },
     { key: 'f2', label: 'دالة الحسابات manage-users', fix: 'انشر supabase/functions/manage-users (انظر README)', ok: users },
     {
-      key: 'f3', label: 'قراءة الفواتير من الصور scan-invoice',
-      fix: scan.error ? 'انشر supabase/functions/scan-invoice (انظر README)' : 'أضف السرّ ANTHROPIC_API_KEY في Supabase → Edge Functions → Secrets',
+      key: 'f3', label: `قراءة الفواتير من الصور scan-invoice${scanInfo?.provider ? ` (${scanInfo.provider === 'gemini' ? 'Gemini' : 'Claude'})` : ''}`,
+      fix: scan.error ? 'انشر supabase/functions/scan-invoice (انظر README)' : 'أضف السرّ GEMINI_API_KEY (أو ANTHROPIC_API_KEY) في Supabase → Edge Functions → Secrets',
       ok: scanKey,
     },
     { key: 's1', label: 'مكان حفظ صور الرسائل', fix: 'شغّل supabase/005_messages.sql', ok: !bucket.error, detail: bucket.error?.message },

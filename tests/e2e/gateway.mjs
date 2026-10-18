@@ -12,6 +12,24 @@ const verify = (t) => { try { const [h, p, s] = t.split('.'); if (crypto.createH
 const db = new pg.Pool({ host: process.argv[3], port: 5433, user: 'postgres', database: 'erp' })
 const files = new Map() // storage: path -> Buffer
 let lastClaude = null // آخر طلب وصل إلى Claude المزيّف (للتحقق في الاختبار)
+let lastGemini = null
+/** الفاتورة الثابتة التي «يقرؤها» النموذج المزيّف */
+function cannedInvoice(kind) {
+  const nul = { party_phone: null, invoice_ref: null, discount: null, note: null }
+  return kind === 'purchase'
+    ? { ...nul, readable: true, party_name: 'Ets du Bois / مؤسسة الخشب', party_match: 'مؤسسة الخشب', invoice_date: '2026-10-12', invoice_ref: 'FA-2026/118',
+        lines: [
+          { description: 'Panneau MDF 18mm', qty: 4, unit: 'sheet', unit_price: 5200, line_total: 20800, match: 'MDF 18 مم' },
+          { description: 'Colle blanche vinylique 5kg', qty: 2, unit: 'box', unit_price: null, line_total: 3000, match: 'مادة غير موجودة' },
+        ],
+        total: 23800, note: 'الطابع الجبائي غير مكتوب بوضوح.' }
+    : { ...nul, readable: true, party_name: 'نادية قاسمي', party_phone: '0770 11 22 33', party_match: null, invoice_date: '2026-10-14',
+        lines: [
+          { description: 'Canapé d’angle velours', qty: 1, unit: 'piece', unit_price: 95000, line_total: 95000, match: null },
+          { description: 'Table basse', qty: 1, unit: 'piece', unit_price: null, line_total: 18000, match: null },
+        ],
+        discount: 3000, total: 110000 }
+}
 // supabase-js يرفع الصور كـ multipart/form-data: نحفظ جزء الملف فقط حتى تظهر الصورة فعلًا
 function filePart(buf, type = '') {
   const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(type)
@@ -64,24 +82,29 @@ http.createServer(async (req, res) => {
         image: b.messages?.[0]?.content?.some((c) => c.type === 'image' && c.source?.media_type === 'image/jpeg' && c.source.data.length > 100),
         knowsSupplier: text.includes('مؤسسة الخشب'), knowsMaterial: text.includes('MDF 18 مم'), kind: text.includes('purchase invoice') ? 'purchase' : 'sale',
       }
-      const nul = { party_phone: null, invoice_ref: null, discount: null, note: null }
-      const out = lastClaude.kind === 'purchase'
-        ? { ...nul, readable: true, party_name: 'Ets du Bois / مؤسسة الخشب', party_match: 'مؤسسة الخشب', invoice_date: '2026-10-12', invoice_ref: 'FA-2026/118',
-            lines: [
-              { description: 'Panneau MDF 18mm', qty: 4, unit: 'sheet', unit_price: 5200, line_total: 20800, match: 'MDF 18 مم' },
-              { description: 'Colle blanche vinylique 5kg', qty: 2, unit: 'box', unit_price: null, line_total: 3000, match: 'مادة غير موجودة' },
-            ],
-            total: 23800, note: 'الطابع الجبائي غير مكتوب بوضوح.' }
-        : { ...nul, readable: true, party_name: 'نادية قاسمي', party_phone: '0770 11 22 33', party_match: null, invoice_date: '2026-10-14',
-            lines: [
-              { description: 'Canapé d’angle velours', qty: 1, unit: 'piece', unit_price: 95000, line_total: 95000, match: null },
-              { description: 'Table basse', qty: 1, unit: 'piece', unit_price: null, line_total: 18000, match: null },
-            ],
-            discount: 3000, total: 110000 }
       return send(res, 200, {
         id: 'msg_e2e', type: 'message', role: 'assistant', model: b.model, stop_reason: 'end_turn', stop_sequence: null,
-        content: [{ type: 'text', text: JSON.stringify(out) }], usage: { input_tokens: 1500, output_tokens: 300 },
+        content: [{ type: 'text', text: JSON.stringify(cannedInvoice(lastClaude.kind)) }], usage: { input_tokens: 1500, output_tokens: 300 },
       })
+    }
+    // Gemini مزيّف: نفس الفاتورة الثابتة بصيغة generateContent
+    if (u.pathname.startsWith('/fake-gemini/v1beta/models/') && u.pathname.endsWith(':generateContent') && req.method === 'POST') {
+      const b = JSON.parse((await body(req)).toString())
+      const parts = b.contents?.[0]?.parts ?? []
+      const text = parts.find((x) => x.text)?.text ?? ''
+      lastGemini = {
+        key: req.headers['x-goog-api-key'], model: decodeURIComponent(u.pathname.split('/')[4].replace(':generateContent', '')),
+        json: b.generationConfig?.responseMimeType === 'application/json', schema: b.generationConfig?.responseSchema?.type === 'OBJECT',
+        image: parts.some((x) => x.inlineData?.mimeType === 'image/jpeg' && x.inlineData.data.length > 100),
+        system: !!b.systemInstruction?.parts?.[0]?.text, kind: text.includes('purchase invoice') ? 'purchase' : 'sale',
+      }
+      return send(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(cannedInvoice(lastGemini.kind)) }] }, finishReason: 'STOP' }] })
+    }
+    if (u.pathname === '/fake-gemini/last') return send(res, 200, lastGemini)
+    // يختار الاختبار أيّ نسخة من scan-invoice تُستعمل (Claude على 8012 أو Gemini على 8013)
+    if (u.pathname === '/fake/scan-provider' && req.method === 'POST') {
+      FN['scan-invoice'] = JSON.parse((await body(req)).toString()).provider === 'gemini' ? 8013 : 8012
+      return send(res, 200, { port: FN['scan-invoice'] })
     }
     if (u.pathname === '/fake-anthropic/last') return send(res, 200, lastClaude)
     if (u.pathname.startsWith('/functions/v1/')) {

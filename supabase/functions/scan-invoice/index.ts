@@ -1,11 +1,13 @@
 // CHER MEUBLE — قراءة فاتورة من صورة (Supabase Edge Function)
 //
-// للمدير فقط. يرسل التطبيق صورة فاتورة (JPEG بصيغة base64)، فيقرؤها Claude
-// ويعيد المعلومات منظّمة: الطرف الآخر، التاريخ، رقم الفاتورة، الأسطر، والمجموع.
+// للمدير فقط. يرسل التطبيق صورة فاتورة (JPEG بصيغة base64)، فيقرؤها Gemini أو Claude
+// (حسب المفتاح المضبوط) ويعيد المعلومات منظّمة: الطرف الآخر، التاريخ، رقم الفاتورة، الأسطر، والمجموع.
 // لا يُحفظ شيء هنا: التطبيق يملأ النموذج والمدير يراجع ثم يحفظ بنفسه.
 //
-// يحتاج سرًّا واحدًا في Supabase → Edge Functions → Secrets:
-//   ANTHROPIC_API_KEY = مفتاح من console.anthropic.com
+// يحتاج سرًّا واحدًا في Supabase → Edge Functions → Secrets، أحدهما:
+//   GEMINI_API_KEY    = مفتاح Google من aistudio.google.com (يقرأ به Gemini)
+//   ANTHROPIC_API_KEY = مفتاح من console.anthropic.com (يقرأ به Claude Opus 5.5)
+// اختياري: GEMINI_MODEL لتغيير نموذج Gemini، و INVOICE_AI = claude لتفضيل Claude إن وُجد المفتاحان
 //
 // الطلب (JSON):
 //   { "kind": "purchase" | "sale", "image": "<base64 jpeg>" }
@@ -121,6 +123,129 @@ function clean(s: Scan, parties: string[], items: string[]): Scan {
   }
 }
 
+class ReadError extends Error {
+  constructor(message: string, public status = 502, public code?: string) { super(message) }
+}
+
+/**
+ * أيّ خدمة تقرأ الفاتورة؟
+ * - Gemini إن وُجد GEMINI_API_KEY (أو GOOGLE_API_KEY)، أو وُضع مفتاح Google (يبدأ بـ AIza) في ANTHROPIC_API_KEY
+ * - وإلا Claude بالمفتاح ANTHROPIC_API_KEY
+ * - INVOICE_AI = gemini | claude يفرض الاختيار إن وُجد المفتاحان
+ */
+function provider(): { name: 'gemini' | 'claude'; key: string } | null {
+  const anthropic = (Deno.env.get('ANTHROPIC_API_KEY') ?? '').trim()
+  const google = (Deno.env.get('GEMINI_API_KEY') ?? Deno.env.get('GOOGLE_API_KEY') ?? '').trim() || (anthropic.startsWith('AIza') ? anthropic : '')
+  const claude = anthropic && !anthropic.startsWith('AIza') ? anthropic : ''
+  const want = (Deno.env.get('INVOICE_AI') ?? '').toLowerCase()
+  if (want === 'claude' && claude) return { name: 'claude', key: claude }
+  if (google) return { name: 'gemini', key: google }
+  if (claude) return { name: 'claude', key: claude }
+  return null
+}
+
+/** Claude Opus 5.5: صورة + structured outputs، مع بديل تلقائي عند الرفض */
+async function readWithClaude(image: string, task: string): Promise<string> {
+  const client = new Anthropic()
+  const res = await client.beta.messages.create({
+    model: 'claude-opus-5-5',
+    max_tokens: 16000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+    system: SYSTEM,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+        { type: 'text', text: task },
+      ],
+    }],
+  })
+  if (res.stop_reason === 'refusal') throw new ReadError('تعذّرت قراءة هذه الصورة. جرّب صورة أخرى أو أدخل الفاتورة يدويًا.', 422, 'refusal')
+  if (res.stop_reason === 'max_tokens') throw new ReadError('الفاتورة طويلة جدًا لقراءتها مرة واحدة. صوّر جزءًا منها.', 422, 'too_long')
+  const text = res.content.find((b) => b.type === 'text')
+  if (!text || text.type !== 'text') throw new ReadError('لم يصل جواب مقروء. أعد المحاولة.')
+  return text.text
+}
+
+// نفس شكل الجواب بصيغة Gemini (responseSchema: مجموعة OpenAPI، والقيمة الفارغة بـ nullable)
+const g = (type: string, extra: Record<string, unknown> = {}) => ({ type, nullable: true, ...extra })
+const GEMINI_SCHEMA = {
+  type: 'OBJECT',
+  required: ['readable', 'party_name', 'party_phone', 'party_match', 'invoice_date', 'invoice_ref', 'lines', 'discount', 'total', 'note'],
+  propertyOrdering: ['readable', 'party_name', 'party_phone', 'party_match', 'invoice_date', 'invoice_ref', 'lines', 'discount', 'total', 'note'],
+  properties: {
+    readable: { type: 'BOOLEAN' },
+    party_name: g('STRING'),
+    party_phone: g('STRING'),
+    party_match: g('STRING'),
+    invoice_date: g('STRING', { description: 'YYYY-MM-DD' }),
+    invoice_ref: g('STRING'),
+    lines: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        required: ['description', 'qty', 'unit', 'unit_price', 'line_total', 'match'],
+        propertyOrdering: ['description', 'qty', 'unit', 'unit_price', 'line_total', 'match'],
+        properties: {
+          description: { type: 'STRING' },
+          qty: g('NUMBER'),
+          unit: g('STRING', { format: 'enum', enum: [...UNITS] }),
+          unit_price: g('NUMBER'),
+          line_total: g('NUMBER'),
+          match: g('STRING'),
+        },
+      },
+    },
+    discount: g('NUMBER'),
+    total: g('NUMBER'),
+    note: g('STRING'),
+  },
+}
+
+/** Gemini: صورة + JSON مقيّد بالشكل. النموذج قابل للتغيير بالسرّ GEMINI_MODEL */
+async function readWithGemini(key: string, image: string, task: string): Promise<string> {
+  const model = (Deno.env.get('GEMINI_MODEL') ?? '').trim() || 'gemini-flash-latest'
+  const base = (Deno.env.get('GEMINI_BASE_URL') ?? 'https://generativelanguage.googleapis.com').replace(/\/$/, '')
+  let res: Response
+  try {
+    res = await fetch(`${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: image } }, { text: task }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: GEMINI_SCHEMA, temperature: 0, maxOutputTokens: 16000 },
+      }),
+    })
+  } catch {
+    throw new ReadError('تعذّر الاتصال بخدمة Gemini. أعد المحاولة.')
+  }
+  const body = await res.json().catch(() => ({})) as {
+    error?: { message?: string; status?: string }
+    promptFeedback?: { blockReason?: string }
+    candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[]
+  }
+  if (!res.ok) {
+    const why = `${body.error?.status ?? ''} ${body.error?.message ?? ''}`
+    if (/API_KEY_INVALID|API key not valid/i.test(why) || res.status === 401) throw new ReadError('مفتاح Gemini (GEMINI_API_KEY) غير صحيح.', 502, 'bad_key')
+    if (res.status === 404) throw new ReadError(`نموذج Gemini «${model}» غير متاح. ضع اسم نموذج صحيح في السرّ GEMINI_MODEL (مثل gemini-flash-latest).`, 502, 'model')
+    if (res.status === 429) throw new ReadError('انتهت الحصة المتاحة لمفتاح Gemini الآن. أعد المحاولة بعد قليل، أو فعّل الفوترة في Google AI Studio.', 429, 'rate')
+    if (res.status === 403) throw new ReadError('مفتاح Gemini لا يملك صلاحية هذا الطلب. تحقق منه في Google AI Studio.', 502, 'denied')
+    if (res.status === 400) throw new ReadError('تعذّر إرسال الصورة إلى Gemini. جرّب صورة أوضح.', 400, 'bad_request')
+    throw new ReadError(`خدمة Gemini غير متاحة الآن (${res.status}). أعد المحاولة لاحقًا.`, 502, 'api')
+  }
+  const cand = body.candidates?.[0]
+  if (body.promptFeedback?.blockReason || /SAFETY|PROHIBITED|BLOCKLIST|RECITATION/.test(cand?.finishReason ?? '')) {
+    throw new ReadError('تعذّرت قراءة هذه الصورة. جرّب صورة أخرى أو أدخل الفاتورة يدويًا.', 422, 'refusal')
+  }
+  if (cand?.finishReason === 'MAX_TOKENS') throw new ReadError('الفاتورة طويلة جدًا لقراءتها مرة واحدة. صوّر جزءًا منها.', 422, 'too_long')
+  const text = (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('')
+  if (!text.trim()) throw new ReadError('لم يصل جواب مقروء. أعد المحاولة.')
+  return text
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return fail('method', 405)
@@ -135,11 +260,11 @@ Deno.serve(async (req) => {
   if (!me?.active || me.role !== 'admin') return fail('قراءة الفواتير للمدير فقط', 403)
 
   const input = await req.json().catch(() => ({}))
-  const hasKey = !!Deno.env.get('ANTHROPIC_API_KEY')
-  // لصفحة «حالة النظام»: الدالة منشورة؟ والمفتاح مضبوط؟
-  if (input.action === 'ping') return json({ ok: true, key: hasKey })
-  if (!hasKey) {
-    return fail('مفتاح Claude غير مضبوط بعد. أضف ANTHROPIC_API_KEY في Supabase → Edge Functions → Secrets.', 503, 'no_key')
+  const ai = provider()
+  // لصفحة «حالة النظام»: الدالة منشورة؟ والمفتاح مضبوط؟ وأيّ خدمة تقرأ؟
+  if (input.action === 'ping') return json({ ok: true, key: !!ai, provider: ai?.name ?? null })
+  if (!ai) {
+    return fail('مفتاح القراءة غير مضبوط بعد. أضف GEMINI_API_KEY (أو ANTHROPIC_API_KEY) في Supabase → Edge Functions → Secrets.', 503, 'no_key')
   }
 
   const kind = input.kind === 'sale' ? 'sale' : 'purchase'
@@ -148,7 +273,7 @@ Deno.serve(async (req) => {
     return fail('الصورة غير صالحة أو كبيرة جدًا')
   }
 
-  // الأسماء المعروفة تساعد Claude على ربط الفاتورة بما هو موجود في البرنامج
+  // الأسماء المعروفة تساعد النموذج على ربط الفاتورة بما هو موجود في البرنامج
   const [parties, items] = kind === 'purchase'
     ? await Promise.all([
         db.from('suppliers').select('name').eq('active', true).order('name').limit(500),
@@ -165,30 +290,12 @@ Known materials (for each line's match): ${JSON.stringify(itemNames)}`
     : `This is a sales document (invoice, quote or order note) for a customer of CHER MEUBLE. party = the customer (the buyer), never CHER MEUBLE itself. Lines are furniture pieces; leave match null.
 Known customers: ${JSON.stringify(partyNames)}`
 
-  const client = new Anthropic()
   try {
-    const res = await client.beta.messages.create({
-      model: 'claude-opus-5-5',
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
-      system: SYSTEM,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
-          { type: 'text', text: task },
-        ],
-      }],
-    })
-    if (res.stop_reason === 'refusal') return fail('تعذّرت قراءة هذه الصورة. جرّب صورة أخرى أو أدخل الفاتورة يدويًا.', 422, 'refusal')
-    if (res.stop_reason === 'max_tokens') return fail('الفاتورة طويلة جدًا لقراءتها مرة واحدة. صوّر جزءًا منها.', 422, 'too_long')
-    const text = res.content.find((b) => b.type === 'text')
-    if (!text || text.type !== 'text') return fail('لم يصل جواب مقروء. أعد المحاولة.', 502)
-    const scan = clean(JSON.parse(text.text) as Scan, partyNames, itemNames)
+    const raw = ai.name === 'gemini' ? await readWithGemini(ai.key, image, task) : await readWithClaude(image, task)
+    const scan = clean(JSON.parse(raw) as Scan, partyNames, itemNames)
     return json({ kind, ...scan })
   } catch (e) {
+    if (e instanceof ReadError) return fail(e.message, e.status, e.code)
     if (e instanceof Anthropic.AuthenticationError) return fail('مفتاح Claude (ANTHROPIC_API_KEY) غير صحيح.', 502, 'bad_key')
     if (e instanceof Anthropic.PermissionDeniedError) return fail('حساب Claude لا يسمح بهذا الطلب. تحقق من الرصيد والصلاحيات في console.anthropic.com.', 502, 'denied')
     if (e instanceof Anthropic.RateLimitError) return fail('ضغط كبير الآن. أعد المحاولة بعد دقيقة.', 429, 'rate')

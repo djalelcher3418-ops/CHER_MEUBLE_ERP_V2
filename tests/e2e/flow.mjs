@@ -496,7 +496,11 @@ await step('purchase from an invoice photo', async () => {
     'the function sent the photo to Claude Opus 5.5 with the JSON schema and the refusal fallback')
   ok(c.knowsSupplier && c.knowsMaterial, 'Claude was given the known supplier and material names to match against')
 })
-await step('order from a customer invoice photo', async () => {
+await step('order from a customer invoice photo (Gemini key)', async () => {
+  await fetch('http://localhost:4174/fake/scan-provider', { method: 'POST', body: JSON.stringify({ provider: 'gemini' }) })
+  await go(p, '/status')
+  await p.locator('text=قراءة الفواتير من الصور scan-invoice (Gemini)').waitFor({ timeout: 10000 })
+  ok(await p.locator('text=كل شيء جاهز').count() === 1, 'with only a Gemini key, the status page shows invoice reading ready (Gemini)')
   await go(p, '/orders')
   await p.getByRole('button', { name: '+ طلبية جديدة' }).click()
   const m = modal(p)
@@ -514,6 +518,9 @@ await step('order from a customer invoice photo', async () => {
   await m.getByRole('button', { name: 'حفظ الطلبية' }).click(); await p.waitForTimeout(1200)
   const o = await one(`select total, to_char(order_date, 'YYYY-MM-DD') d from order_totals where customer_id = ${cu.id}`)
   ok(Number(o?.total) === 110000 && o.d === '2026-10-14', `the order was saved from the photo (${o?.total} DZD on ${o?.d})`)
+  const gm = await (await fetch('http://localhost:4174/fake-gemini/last')).json()
+  ok(gm?.key === 'AIza-e2e-fake' && gm.model === 'gemini-flash-latest' && gm.json && gm.schema && gm.image && gm.system && gm.kind === 'sale',
+    'the function read it with Gemini: image + JSON schema, default model gemini-flash-latest')
 })
 
 console.log('\n--- failed requests / page errors:', problems.length ? '\n' + problems.join('\n') : 'none')

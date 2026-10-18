@@ -36,6 +36,10 @@ for fn in send-push:8010 manage-users:8011 scan-invoice:8012; do
   (cd "$W/fn" && FN_PORT=${fn##*:} FN_FILE="file://$R/supabase/functions/${fn%%:*}/index.ts" SUPABASE_URL=http://127.0.0.1:4174 \
      SUPABASE_SERVICE_ROLE_KEY=$SERVICE ANTHROPIC_API_KEY=e2e-fake-key ANTHROPIC_BASE_URL=http://127.0.0.1:4174/fake-anthropic "$DENO" run --allow-net --allow-env --allow-read --allow-sys fn-wrapper.ts > "$W/fn-${fn%%:*}.log" 2>&1) & pids+=($!)
 done
+# نسخة ثانية من scan-invoice بمفتاح Gemini فقط (تكلّم Gemini المزيّف داخل البوابة)
+(cd "$W/fn" && FN_PORT=8013 FN_FILE="file://$R/supabase/functions/scan-invoice/index.ts" SUPABASE_URL=http://127.0.0.1:4174 \
+   SUPABASE_SERVICE_ROLE_KEY=$SERVICE GEMINI_API_KEY=AIza-e2e-fake GEMINI_BASE_URL=http://127.0.0.1:4174/fake-gemini \
+   "$DENO" run --allow-net --allow-env --allow-read --allow-sys fn-wrapper.ts > "$W/fn-scan-invoice-gemini.log" 2>&1) & pids+=($!)
 trap 'kill ${pids[*]} 2>/dev/null || true' EXIT
-for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8011/ -X OPTIONS && curl -sf -o /dev/null http://127.0.0.1:8012/ -X OPTIONS && curl -sf -o /dev/null http://127.0.0.1:4174/rest/v1/ && break; sleep 1; done
+for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8011/ -X OPTIONS && curl -sf -o /dev/null http://127.0.0.1:8012/ -X OPTIONS && curl -sf -o /dev/null http://127.0.0.1:8013/ -X OPTIONS && curl -sf -o /dev/null http://127.0.0.1:4174/rest/v1/ && break; sleep 1; done
 node "$E/flow.mjs" "$W/shots" "$PG_SOCKET_DIR"

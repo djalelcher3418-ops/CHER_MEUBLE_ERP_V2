@@ -4,7 +4,7 @@ import type { Unit } from './types'
 
 export type ScanKind = 'purchase' | 'sale'
 
-/** ما قرأه Claude من صورة الفاتورة (يُراجَع قبل الحفظ) */
+/** ما قُرئ من صورة الفاتورة (Gemini أو Claude؛ يُراجَع قبل الحفظ) */
 export interface InvoiceScan {
   kind: ScanKind
   readable: boolean
