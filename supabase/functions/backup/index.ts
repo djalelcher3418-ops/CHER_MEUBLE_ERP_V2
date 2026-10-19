@@ -81,12 +81,19 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date()
-  const stamp = now.toISOString().slice(0, 16).replace(/[:T]/g, '-')
+  // الاسم بالثواني حتى لا تتصادم نسختان في نفس الدقيقة (التلقائية وزر «نسخة الآن»)
+  const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, '-')
   const name = `CHER-MEUBLE-${stamp}.json`
   const { data: ver } = await db.rpc('erp_schema_version')
   const body = JSON.stringify({ app: 'CHER MEUBLE ERP', created_at: now.toISOString(), schema_version: ver ?? null, tables })
   const up = await db.storage.from(BUCKET).upload(name, new Blob([body], { type: 'application/json' }), { contentType: 'application/json' })
-  if (up.error) return json({ error: 'تعذّر حفظ النسخة: ' + up.error.message }, 500)
+  if (up.error) {
+    // نسخة بنفس الاسم حُفظت للتو (طلبان في نفس الثانية): لا خطأ، النسخة موجودة
+    if (/already exists|Duplicate|409/i.test(`${up.error.message} ${(up.error as { statusCode?: string }).statusCode ?? ''}`)) {
+      return json({ ok: true, name, already: true })
+    }
+    return json({ error: 'تعذّر حفظ النسخة: ' + up.error.message }, 500)
+  }
 
   // نحذف الأقدم ونُبقي آخر 12
   const old = backups.slice(KEEP - 1).map((f) => f.name)
