@@ -74,5 +74,6 @@ export const phoneDigits = (p: string | null | undefined) => {
 }
 
 /** سعر الوحدة: المكتوب، أو مجموع السطر ÷ الكمية */
+// بدون كمية مقروءة: السطر قطعة واحدة بمجموعه
 export const linePrice = (l: InvoiceScan['lines'][number]) =>
-  l.unit_price ?? (l.line_total != null && l.qty ? Math.round((l.line_total / l.qty) * 100) / 100 : null)
+  l.unit_price ?? (l.line_total == null ? null : l.qty ? Math.round((l.line_total / l.qty) * 100) / 100 : l.line_total)

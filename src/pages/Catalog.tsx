@@ -140,6 +140,8 @@ function ProductForm({ draft: initial, materials, onClose, onDone }: { draft: Dr
   const [error, setError] = useState('')
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
+  // رقم المنتج بعد أول حفظ: إعادة «حفظ» بعد خطأ (مكوّنات/صورة) تعدّله ولا تنشئ منتجًا ثانيًا
+  const savedId = useRef(initial.id)
 
   const set = (patch: Partial<Draft>) => setD({ ...d, ...patch })
   const setRecipe = (i: number, patch: Partial<Recipe>) => set({ recipe: d.recipe.map((r, k) => (k === i ? { ...r, ...patch } : r)) })
@@ -150,17 +152,19 @@ function ProductForm({ draft: initial, materials, onClose, onDone }: { draft: Dr
     if (!d.name.trim()) return setError('اكتب اسم المنتج')
     const recipe = d.recipe.filter((r) => r.material_id && Number(r.qty) > 0)
     if (new Set(recipe.map((r) => r.material_id)).size !== recipe.length) return setError('كل مادة مرة واحدة فقط في المكوّنات')
+    if (busy) return
     setBusy(true)
     setError('')
     const row = {
       name: d.name.trim(), description: d.description.trim() || null, price: Number(d.price) || 0,
       size: d.size.trim() || null, fabric: d.fabric.trim() || null, legs: d.legs.trim() || null, public: d.public,
     }
-    const res = d.id
-      ? await supabase.from('products').update(row).eq('id', d.id).select('id').single()
+    const res = savedId.current
+      ? await supabase.from('products').update(row).eq('id', savedId.current).select('id').single()
       : await supabase.from('products').insert(row).select('id').single()
     if (res.error) { setBusy(false); return setError(arabicError(res.error)) }
     const id = (res.data as { id: number }).id
+    savedId.current = id
 
     // المكوّنات: نستبدلها كلها بما في النموذج
     const del = await supabase.from('product_materials').delete().eq('product_id', id)
@@ -172,7 +176,8 @@ function ProductForm({ draft: initial, materials, onClose, onDone }: { draft: Dr
     if (photo) {
       try {
         const path = await uploadProductPhoto(id, photo.file)
-        await supabase.from('products').update({ photo_path: path }).eq('id', id)
+        const up = await supabase.from('products').update({ photo_path: path }).eq('id', id)
+        if (up.error) throw up.error
         if (d.photo_path) supabase.storage.from('products').remove([d.photo_path]).then(() => {})
       } catch (err) {
         setBusy(false)

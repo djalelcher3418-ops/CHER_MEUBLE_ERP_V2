@@ -45,6 +45,21 @@ async function vapidKeys(db: SupabaseClient): Promise<{ public_key: string; priv
 const RECENT_MS = 10 * 60 * 1000 // لا نرسل تنبيهًا لحدث أقدم من 10 دقائق
 
 Deno.serve(async (req) => {
+  try {
+    return await handle(req)
+  } catch (e) {
+    console.error(e)
+    return json({ error: 'internal' }, 500)
+  }
+})
+
+/** يسجّل الحدث مرة واحدة: false إن أُرسل تنبيهه من قبل (طلب مكرر) */
+async function firstTime(db: SupabaseClient, kind: string, ref: string): Promise<boolean> {
+  const { error } = await db.from('push_log').insert({ kind, ref })
+  return error?.code !== '23505' // جدول غير موجود (قبل 018): نرسل كالسابق
+}
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'method' }, 405)
 
@@ -68,6 +83,7 @@ Deno.serve(async (req) => {
   const active = people ?? []
   let recipients: string[] = []
   let payload: Payload
+  let once: [string, string]
 
   if (input.message_id) {
     const { data: m } = await db
@@ -88,6 +104,7 @@ Deno.serve(async (req) => {
       url: `/messages/${m.chat_id}`,
       tag: `chat-${m.chat_id}`,
     }
+    once = ['message', String(m.id)]
   } else if (input.order_id) {
     const { data: o } = await db.from('orders').select('id, title, status').eq('id', input.order_id).maybeSingle()
     const { data: ev } = await db
@@ -107,6 +124,7 @@ Deno.serve(async (req) => {
       url: `/orders?open=${o.id}`,
       tag: `order-${o.id}`,
     }
+    once = ['order', `${o.id}:${o.status}:${ev.created_at}`]
   } else if (input.post_id) {
     const { data: p } = await db
       .from('team_posts')
@@ -123,6 +141,7 @@ Deno.serve(async (req) => {
       url: '/team',
       tag: `post-${p.id}`,
     }
+    once = ['post', String(p.id)]
   } else if (input.assigned_order_id) {
     if (me.role !== 'admin') return json({ error: 'admin only' }, 403)
     const { data: o } = await db.from('orders').select('id, title, assigned_to, due_date').eq('id', input.assigned_order_id).maybeSingle()
@@ -134,6 +153,7 @@ Deno.serve(async (req) => {
       url: '/workshop',
       tag: `assigned-${o.id}`,
     }
+    once = ['assigned', `${o.id}:${o.assigned_to}`]
   } else if (input.comment_id) {
     const { data: c } = await db
       .from('team_post_comments')
@@ -151,11 +171,13 @@ Deno.serve(async (req) => {
       url: '/team',
       tag: `comment-${c.id}`,
     }
+    once = ['comment', String(c.id)]
   } else {
     return json({ error: 'bad request' }, 400)
   }
 
   if (!recipients.length) return json({ sent: 0 })
+  if (!(await firstTime(db, ...once))) return json({ sent: 0, reason: 'duplicate' })
   const { data: subs } = await db.from('push_subscriptions').select('id, endpoint, p256dh, auth').in('profile_id', recipients)
 
   webpush.setVapidDetails('https://cher-meuble-erp-v2.pages.dev', keys.public_key, keys.private_key)
@@ -175,4 +197,4 @@ Deno.serve(async (req) => {
   )
   if (dead.length) await db.from('push_subscriptions').delete().in('id', dead)
   return json({ sent, removed: dead.length })
-})
+}

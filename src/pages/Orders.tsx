@@ -520,7 +520,7 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
     const c = customers.find((x) => x.name === r.party_match)
       ?? (phone.length >= 9 ? customers.find((x) => phoneDigits(x.phone) === phone) : undefined)
       ?? bestMatch(r.party_name, customers)
-    if (c) setCustomerId(String(c.id))
+    setCustomerId(c ? String(c.id) : '')
     setNewCustomer(!c && r.party_name ? { name: r.party_name, phone: phone || null } : null)
     if (r.invoice_date) setOrderDate(r.invoice_date)
     if (!title.trim() && r.lines[0]) setTitle(r.lines.length > 1 ? `${r.lines[0].description} وغيرها` : r.lines[0].description)
@@ -535,8 +535,10 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
   }
 
   async function addCustomer() {
-    if (!newCustomer) return
+    if (!newCustomer || busy) return
+    setBusy(true)
     const { data, error } = await supabase.from('customers').insert({ name: newCustomer.name, phone: newCustomer.phone }).select('*').single()
+    setBusy(false)
     if (error) return setError(arabicError(error))
     const c = data as Customer
     setCustomers([...customers, c].sort((a, b) => a.name.localeCompare(b.name, 'ar')))
@@ -550,6 +552,7 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
     if (!customerId) return setError('اختر الزبون')
     if (!valid.length) return setError('أضف سطرًا واحدًا على الأقل')
     if (total < 0) return setError('التخفيض أكبر من المجموع')
+    if (busy) return
     setBusy(true)
     setError('')
 
@@ -580,19 +583,22 @@ function OrderForm({ customers: initialCustomers, order, items, quote = false, o
     savedId.current = orderId
 
     // صور السرير المطلوب: تُرفع بعد حفظ الطلبية، وكل صورة رُفعت تُزال من القائمة حتى لا تتكرر
+    // روابط المعاينة تُحرَّر بعد إزالة الصور من القائمة (لا أثناء الرفع وهي ما تزال معروضة)
     let left = photos
+    const release = () => photos.filter((p) => !left.includes(p)).forEach((p) => URL.revokeObjectURL(p.url))
     for (const p of photos) {
       try {
         await addOrderPhoto(orderId, p.file)
-        URL.revokeObjectURL(p.url)
         left = left.filter((x) => x !== p)
       } catch (e) {
         setPhotos(left)
+        release()
         setBusy(false)
         return setError('حُفظت الطلبية لكن صورة لم تُرفع: ' + arabicError(e) + ' — اضغط «حفظ» مرة أخرى لإعادة المحاولة.')
       }
     }
     setPhotos(left)
+    release()
     if (order) return onDone(orderId)
 
     if (Number(deposit) > 0) {

@@ -23,15 +23,17 @@ export async function autoBackup(): Promise<{ name: string } | null> {
   return { name: data.name as string }
 }
 
-export async function backupNow(): Promise<string> {
+/** missing: جداول لم تُقرأ (مثلًا ملف SQL لم يُشغَّل بعد): النسخة ناقصة */
+export async function backupNow(): Promise<{ name: string; missing: string[] }> {
   const { data, error } = await supabase.functions.invoke('backup', { body: {} })
   if (error) {
     const ctx = (error as { context?: Response }).context
     if (ctx?.status === 404) throw new Error('دالة backup غير منشورة بعد في Supabase. انظر README.')
-    try { const b = await ctx?.clone().json(); if (b?.error) throw new Error(b.error) } catch (e) { if (e instanceof Error && e.message) throw e }
-    throw new Error(arabicError(error))
+    // رسالة الخادم إن كان الرد JSON، وإلا الخطأ العام
+    const b = await ctx?.clone().json().catch(() => null)
+    throw new Error(typeof b?.error === 'string' ? b.error : arabicError(error))
   }
-  return data.name as string
+  return { name: data.name as string, missing: (data.missing as string[] | undefined) ?? [] }
 }
 
 export async function listBackups(): Promise<BackupFile[]> {

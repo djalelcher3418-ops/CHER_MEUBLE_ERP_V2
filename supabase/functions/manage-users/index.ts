@@ -68,7 +68,11 @@ Deno.serve(async (req) => {
     const id = created.user.id
     // المشغّل handle_new_user ينشئ الملف الشخصي؛ نكمل الهاتف والدور
     const { error: pErr } = await db.from('profiles').update({ full_name: name, phone, role, active: true }).eq('id', id)
-    if (pErr) return fail('أُنشئ الحساب لكن لم يُحفظ الدور: ' + pErr.message, 500)
+    if (pErr) {
+      // لا نترك حسابًا ناقصًا: نحذفه حتى يمكن إعادة المحاولة بنفس الرقم
+      await db.auth.admin.deleteUser(id).catch(() => {})
+      return fail('تعذّر إنشاء الحساب: ' + pErr.message, 500)
+    }
     if (input.employee_id) {
       await db.from('employees').update({ profile_id: id, phone }).eq('id', input.employee_id).is('profile_id', null)
     }
@@ -83,15 +87,25 @@ Deno.serve(async (req) => {
     if (!validPin(input.pin)) return fail('الرمز السري يجب أن يكون 6 أرقام')
     const { error } = await db.auth.admin.updateUserById(target, { password: input.pin })
     if (error) return fail('تعذّر تغيير الرمز: ' + error.message, 500)
-    return json({ ok: true })
+    // من كان داخلًا بالرمز القديم (هاتف ضائع مثلًا) يخرج (ملف 018)
+    const { error: rErr } = await db.rpc('revoke_user_sessions', { p_user: target })
+    return json({ ok: true, sessions_ended: !rErr })
   }
 
   if (input.action === 'set_active') {
     const active = input.active === true
     const { error } = await db.auth.admin.updateUserById(target, { ban_duration: active ? 'none' : '876000h' })
     if (error) return fail('تعذّر تغيير حالة الحساب: ' + error.message, 500)
-    await db.from('profiles').update({ active }).eq('id', target)
-    if (!active) await db.from('push_subscriptions').delete().eq('profile_id', target)
+    const { error: aErr } = await db.from('profiles').update({ active }).eq('id', target)
+    if (aErr) {
+      // نرجع الحظر كما كان حتى لا يختلف تسجيل الدخول عن حالة الحساب
+      await db.auth.admin.updateUserById(target, { ban_duration: active ? '876000h' : 'none' }).catch(() => {})
+      return fail('تعذّر تغيير حالة الحساب: ' + aErr.message, 500)
+    }
+    if (!active) {
+      await db.from('push_subscriptions').delete().eq('profile_id', target)
+      await db.rpc('revoke_user_sessions', { p_user: target })
+    }
     return json({ ok: true })
   }
 

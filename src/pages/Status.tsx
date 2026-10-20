@@ -100,7 +100,11 @@ function Backups() {
     <section className="card backups">
       <div className="page-head" style={{ marginBottom: 6 }}>
         <h3 style={{ margin: 0 }}>النسخ الاحتياطية</h3>
-        <button className="secondary" disabled={!!busy} onClick={() => run('now', async () => { await backupNow(); await load() }, 'تم حفظ نسخة جديدة ✓')}>
+        <button className="secondary" disabled={!!busy} onClick={() => run('now', async () => {
+          const r = await backupNow()
+          await load()
+          if (r.missing.length) throw new Error(`حُفظت النسخة لكنها ناقصة: لم تُقرأ الجداول ${r.missing.join('، ')}. شغّل ملفات SQL الناقصة (انظر الفحص أعلاه).`)
+        }, 'تم حفظ نسخة جديدة ✓')}>
           {busy === 'now' ? 'جارٍ الحفظ…' : 'نسخة الآن'}
         </button>
       </div>

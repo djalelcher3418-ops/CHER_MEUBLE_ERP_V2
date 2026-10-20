@@ -73,7 +73,7 @@ export default function Workshop() {
       </div>
       {error && <p className="error">{error}</p>}
       {loaded && !jobs.length && <p className="muted">لا توجد طلبيات جارية الآن.</p>}
-      {jobs.some((j) => j.assigned_to === me) && (
+      {(mineOnly || jobs.some((j) => j.assigned_to === me)) && (
         <div className="mini-seg" style={{ marginBottom: 12, width: 'fit-content' }}>
           <button type="button" className={!mineOnly ? 'on' : ''} onClick={() => setMineOnly(false)}>كل الطلبيات</button>
           <button type="button" className={mineOnly ? 'on' : ''} onClick={() => setMineOnly(true)}>المُسندة إليّ ({jobs.filter((j) => j.assigned_to === me).length})</button>

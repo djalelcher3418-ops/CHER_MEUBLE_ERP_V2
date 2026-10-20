@@ -29,6 +29,12 @@ const TABLES = [
   'employees', 'absences', 'payroll_payments', 'employee_advances', 'expense_categories', 'expenses',
   'chats', 'messages', 'team_posts', 'team_post_comments', 'team_post_reactions', 'game_scores',
 ]
+// ترتيب ثابت للجداول التي ليس لها عمود id (حتى لا تتكرر صفوف أو تضيع بين الصفحات)
+const ORDER: Record<string, string[]> = {
+  product_materials: ['product_id', 'material_id'],
+  order_material_plan: ['order_id', 'material_id'],
+  team_post_reactions: ['post_id', 'profile_id', 'emoji'],
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -69,12 +75,12 @@ Deno.serve(async (req) => {
     const rows: unknown[] = []
     let failed = false
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await db.from(t).select('*').order('id', { ascending: true, nullsFirst: true }).range(from, from + 999)
-      // بعض الجداول بلا عمود id: نعيد بدون ترتيب
-      const res = error && /column .*id/.test(error.message) ? await db.from(t).select('*').range(from, from + 999) : { data, error }
+      let q = db.from(t).select('*')
+      for (const c of ORDER[t] ?? ['id']) q = q.order(c, { ascending: true })
+      const res = await q.range(from, from + 999)
       if (res.error) { failed = true; break }
       rows.push(...(res.data ?? []))
-      if (!res.data || res.data.length < 1000) break
+      if (!res.data?.length) break // نتوقف عند صفحة فارغة (قد يحدّ الخادم الصفحة بأقل من 1000)
     }
     if (failed) missing.push(t)
     else tables[t] = rows
@@ -95,8 +101,9 @@ Deno.serve(async (req) => {
     return json({ error: 'تعذّر حفظ النسخة: ' + up.error.message }, 500)
   }
 
-  // نحذف الأقدم ونُبقي آخر 12
-  const old = backups.slice(KEEP - 1).map((f) => f.name)
+  // نحذف الأقدم ونُبقي آخر 12 — إلا إن كانت هذه النسخة ناقصة (جدول لم يُقرأ): لا نحذف نسخة كاملة قديمة
+  const ours = backups.filter((f) => f.name.startsWith('CHER-MEUBLE-'))
+  const old = missing.length ? [] : ours.slice(KEEP - 1).map((f) => f.name)
   if (old.length) await db.storage.from(BUCKET).remove(old)
 
   const rows = Object.values(tables).reduce((a, r) => a + r.length, 0)

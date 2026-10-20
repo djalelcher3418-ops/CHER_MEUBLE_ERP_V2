@@ -57,6 +57,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p17', label: 'الكتالوج، المواد اللازمة، الإسناد، الأرباح، النسخ', fix: 'شغّل supabase/017_catalog_planning.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 17,
   },
+  {
+    key: 'p18', label: 'إصلاحات المراجعة (المخزون، الخصوصية، التنبيهات)', fix: 'شغّل supabase/018_review_fixes.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 18,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */

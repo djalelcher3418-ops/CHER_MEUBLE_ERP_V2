@@ -34,9 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  // تزداد عند عودة الإنترنت إن كان الحساب من النسخة المحفوظة: نعيد قراءته (قد يكون أُوقف أو تغيّر دوره)
+  const [refetch, setRefetch] = useState(0)
   useEffect(() => {
     if (!session) return
-    setLoading(true)
+    let stale = false
+    const back = () => setRefetch((n) => n + 1)
+    if (!refetch) setLoading(true) // إعادة القراءة تتم بهدوء دون شاشة التحميل
     supabase
       .from('profiles')
       .select('id, full_name, role, phone, active')
@@ -48,12 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           // بدون إنترنت: نستعمل آخر بيانات حساب محفوظة حتى يفتح التطبيق في الورشة
           if (p) localStorage.setItem(key, JSON.stringify(p))
-          else if (error && isOffline(error)) p = JSON.parse(localStorage.getItem(key) ?? 'null')
+          else if (error && isOffline(error)) {
+            p = JSON.parse(localStorage.getItem(key) ?? 'null')
+            if (!stale) window.addEventListener('online', back, { once: true })
+          }
         } catch { /* تخزين محلي غير متاح */ }
+        if (stale) return
         setProfile(p)
         setLoading(false)
       })
-  }, [session?.user.id])
+    return () => { stale = true; window.removeEventListener('online', back) }
+  }, [session?.user.id, refetch])
 
   const value: AuthState = {
     session,

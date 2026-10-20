@@ -9,6 +9,7 @@ import { UNIT_LABELS, type Material, type MaterialNeed, type OrderCost, type Ord
 export function ProfitPanel({ o, needs, onChanged }: { o: OrderTotal; needs: MaterialNeed[]; onChanged: () => void }) {
   const [costs, setCosts] = useState<OrderCost[] | null>(null)
   const [desc, setDesc] = useState('')
+  const [adding, setAdding] = useState(false)
   const [amount, setAmount] = useState('')
   const [error, setError] = useState('')
 
@@ -29,7 +30,10 @@ export function ProfitPanel({ o, needs, onChanged }: { o: OrderTotal; needs: Mat
   async function add(e: FormEvent) {
     e.preventDefault()
     if (!desc.trim() || !(Number(amount) > 0)) return setError('اكتب البيان والمبلغ')
+    if (adding) return
+    setAdding(true)
     const { error } = await supabase.from('order_costs').insert({ order_id: o.id, description: desc.trim(), amount: Number(amount), spent_on: todayISO() })
+    setAdding(false)
     if (error) return setError(arabicError(error))
     setDesc('')
     setAmount('')
@@ -71,7 +75,7 @@ export function ProfitPanel({ o, needs, onChanged }: { o: OrderTotal; needs: Mat
           <form className="scan-row" onSubmit={add}>
             <input aria-label="بيان التكلفة" placeholder="تكلفة أخرى: نقل، تنجيد خارجي…" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={120} />
             <input aria-label="مبلغ التكلفة" type="number" step="any" min="0" placeholder="المبلغ" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ maxWidth: 120 }} />
-            <button type="submit" className="secondary">إضافة</button>
+            <button type="submit" className="secondary" disabled={adding}>إضافة</button>
           </form>
         </>
       )}

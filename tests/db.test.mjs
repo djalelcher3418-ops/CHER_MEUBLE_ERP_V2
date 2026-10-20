@@ -618,12 +618,11 @@ await as(WORKER)
 const myJob = (await q(`select assigned_to, assigned_name from orders_public where id = ${CAT}`))[0]
 ok(myJob?.assigned_to === WORKER && myJob.assigned_name === 'عامل', 'the workshop board shows who the order is assigned to')
 ok((await q(`select * from order_costs`)).length === 0 && (await q(`select * from product_materials`)).length === 0, 'workers see neither order costs nor product recipes')
-ok((await q(`select * from products`)).length >= 1, 'workers can see the catalog products')
 let assignChanged = false; try { await q(`update orders set assigned_to = null where id = ${CAT}`); assignChanged = (await q(`select assigned_to from orders_public where id = ${CAT}`))[0].assigned_to === null } catch { assignChanged = false }
 ok(!assignChanged, 'a worker cannot change the assignment')
 const ref = '11111111-2222-3333-4444-555555555555'
-await q(`insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (1, 'out', 0.5, ${CAT}, '${WORKER}', '${ref}') on conflict (client_ref) do nothing`)
-await q(`insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (1, 'out', 0.5, ${CAT}, '${WORKER}', '${ref}') on conflict (client_ref) do nothing`)
+await q(`insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (1, 'out', 0.5, ${CAT}, '${WORKER}', '${ref}')`)
+try { await q(`insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (1, 'out', 0.5, ${CAT}, '${WORKER}', '${ref}')`) } catch { /* مكررة */ }
 await as(ADMIN)
 ok((await q(`select count(*)::int n from stock_movements where client_ref = '${ref}'`))[0].n === 1, 'an offline movement sent twice is recorded once')
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
@@ -637,6 +636,41 @@ await db.exec(`select set_config('request.jwt.claim.sub', '', false); set role a
 ok(!(await q(`select catalog_public() as c`))[0].c.some((p) => p.id === bedP.id), 'a product hidden from customers is not in the public catalog')
 await db.exec('reset role')
 await q(`update products set public = true where id = ${bedP.id}`)
+
+// --- 018: review fixes
+await db.exec(fs.readFileSync(R + '/supabase/018_review_fixes.sql', 'utf8'))
+await db.exec(fs.readFileSync(R + '/supabase/018_review_fixes.sql', 'utf8'))
+let old017 = ''; try { await db.exec(fs.readFileSync(R + '/supabase/017_catalog_planning.sql', 'utf8')) } catch (e) { old017 = e.message }
+ok(old017.includes('شُغّل من قبل'), 'running the older 017 again after 018 is refused')
+await as(WORKER)
+ok((await q(`select erp_schema_version() as v`))[0].v === 18, 'schema version is 18')
+const stockBefore = Number((await q(`select qty from materials_public where id = ${foam.id}`))[0].qty)
+await db.exec('reset role')
+await q(`update materials set qty = 10 where id = ${foam.id}`)
+await as(WORKER)
+const ref2 = 'aaaaaaaa-2222-3333-4444-555555555555'
+const ins = `insert into stock_movements (material_id, type, qty, order_id, created_by, client_ref) values (${foam.id}, 'out', 2, ${CAT}, '${WORKER}', '${ref2}')`
+await q(ins)
+let dupCode = ''
+for (let k = 0; k < 2; k++) { try { await q(ins) } catch (e) { dupCode = e.code } }
+ok(dupCode === '23505', 'sending the same movement again is refused as a duplicate (the app treats that as already saved)')
+ok(Number((await q(`select qty from materials_public where id = ${foam.id}`))[0].qty) === 8, `an offline movement sent three times takes the stock out once (10 → 8; it was ${stockBefore} before the reset)`)
+ok((await q(`select * from stock_movements`)).length === 0, 'a worker can no longer read stock movements directly (they carry costs)')
+const myMoves = await q(`select * from my_stock_moves where material_id = ${foam.id}`)
+ok(myMoves.length >= 1 && myMoves[0].unit_cost === undefined && Number(myMoves[0].qty) === 2, 'the worker sees their own movements without any cost')
+let overStock = false; try { await q(`insert into stock_movements (material_id, type, qty, created_by) values (${foam.id}, 'out', 999, '${WORKER}')`) } catch (e) { overStock = e.message.includes('غير كافية') }
+ok(overStock && Number((await q(`select qty from materials_public where id = ${foam.id}`))[0].qty) === 8, 'a worker still cannot take out more than the stock, and nothing changes')
+ok((await q(`select * from products`)).length === 0, 'workers no longer read catalog products (and their prices) inside the app')
+let pushLog = false; try { await q(`select * from push_log`) } catch { pushLog = true }
+ok(pushLog, 'the push log is closed to app users')
+let revoke = false; try { await q(`select revoke_user_sessions('${ADMIN}')`) } catch { revoke = true }
+ok(revoke, 'only the server can end someone’s sessions')
+await as(ADMIN)
+const [dupMove] = await q(`select unit_cost from stock_movements where client_ref = '${ref2}'`)
+ok(Number(dupMove.unit_cost) === 3000, 'the manager still sees the cost of each movement (average price at the time)')
+await q(`insert into stock_movements (material_id, type, qty, unit_cost) values (${foam.id}, 'in', 2, 4500)`)
+const [fm] = await q(`select qty, avg_cost from materials where id = ${foam.id}`)
+ok(Number(fm.qty) === 10 && Number(fm.avg_cost) === 3300, `a purchase-in still updates stock and average cost (8 × 3000 + 2 × 4500) / 10 = 3300 (got ${fm.avg_cost})`)
 
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)

@@ -146,9 +146,19 @@
 
 يتطلب: `017_catalog_planning.sql`، ونشر الدالة الجديدة `backup`، وإعادة نشر `send-push`.
 
+## المرحلة 19: إصلاحات المراجعة
+
+- إخراج مادة أُعيد إرساله (بعد انقطاع الإنترنت) لا يُنقص المخزون مرتين.
+- العامل لا يرى تكلفة المواد ولا أسعار الكتالوج؛ عامل موقوف لا يحذف صور الطلبيات.
+- لا تنبيه مكرر لنفس الحدث؛ تغيير الرمز السري أو إيقاف حساب يُنهي جلساته المفتوحة.
+- النسخة الاحتياطية الناقصة لا تحذف النسخ القديمة الكاملة.
+- لا شراء أو منتج مكرر عند إعادة «حفظ» بعد خطأ؛ ضغطتان سريعتان على «تأكيد الإخراج» حركة واحدة؛ زر «إعادة المحاولة» لحركة رفضها الخادم.
+
+يتطلب: `018_review_fixes.sql`، وإعادة نشر الدوال `send-push` و`manage-users` و`scan-invoice` و`backup`.
+
 ## قاعدة البيانات
 - `supabase/001_phase1.sql` (مُشغَّل مسبقًا على Supabase).
-- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql` ثم `014_team_social.sql` ثم `015_tetris.sql` ثم `016_purchase_photo.sql` ثم `017_catalog_planning.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
+- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql` ثم `014_team_social.sql` ثم `015_tetris.sql` ثم `016_purchase_photo.sql` ثم `017_catalog_planning.sql` ثم `018_review_fixes.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
 
 ## التشغيل على الكمبيوتر
 ```

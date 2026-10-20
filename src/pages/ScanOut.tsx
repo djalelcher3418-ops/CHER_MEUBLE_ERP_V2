@@ -5,7 +5,7 @@ import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import { useAuth } from '../lib/auth'
 import { fold } from '../lib/text'
-import { cacheGet, cacheSet, dropOut, enqueueOut, isOffline, newRef, onQueueChange, pendingOuts, sendOut, syncOuts, type PendingOut } from '../lib/offline'
+import { cacheGet, cacheSet, dropOut, enqueueOut, retryOut, isOffline, newRef, onQueueChange, pendingOuts, sendOut, syncOuts, type PendingOut } from '../lib/offline'
 import { arabicError, dateTime, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type MaterialPublic, type OrderPublic } from '../lib/types'
 
@@ -45,17 +45,19 @@ export default function ScanOut() {
   // بدون إنترنت: نعمل بآخر قائمة محفوظة، والحركات تنتظر في الهاتف
   const [offline, setOffline] = useState(false)
   const [pending, setPending] = useState<PendingOut[]>(pendingOuts)
+  const sending = useRef(false)
+  const [saving, setSaving] = useState(false)
 
   async function load() {
     const [m, r, o] = await Promise.all([
       supabase.from('materials_public').select('*').order('name'),
-      supabase
-        .from('stock_movements')
-        .select('id, qty, note, created_at, material_id, order_id')
-        .eq('type', 'out')
-        .eq('created_by', session!.user.id)
-        .order('created_at', { ascending: false })
-        .limit(15),
+      // حركاتي بدون تكلفة (ملف 018)؛ قبله نقرأ الجدول نفسه
+      supabase.from('my_stock_moves').select('id, qty, note, created_at, material_id, order_id').eq('type', 'out')
+        .order('created_at', { ascending: false }).limit(15)
+        .then((r) => r.error && !isOffline(r.error)
+          ? supabase.from('stock_movements').select('id, qty, note, created_at, material_id, order_id').eq('type', 'out')
+              .eq('created_by', session!.user.id).order('created_at', { ascending: false }).limit(15)
+          : r),
       supabase.from('orders_public').select('*').order('due_date', { ascending: true, nullsFirst: false }),
     ])
     if (m.error && isOffline(m.error)) {
@@ -148,7 +150,7 @@ export default function ScanOut() {
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!found) return
+    if (!found || sending.current) return
     const q = Number(qty)
     if (!(q > 0)) return setMsg({ ok: false, text: 'اكتب كمية صحيحة' })
     const have = Number(found.qty)
@@ -165,7 +167,12 @@ export default function ScanOut() {
       order_id: orderId ? Number(orderId) : null,
       created_by: session!.user.id,
     }
+    // ضغطتان سريعتان على «إخراج» لا تسجّلان حركتين
+    sending.current = true
+    setSaving(true)
     const error = navigator.onLine === false ? new Error('offline') : await sendOut(move)
+    sending.current = false
+    setSaving(false)
     if (error && isOffline(error)) {
       // يُحفظ في الهاتف ويُرسل وحده عند عودة الإنترنت
       enqueueOut({ ...move, at: new Date().toISOString(), name: found.name, unit_label: UNIT_LABELS[found.unit] })
@@ -209,7 +216,12 @@ export default function ScanOut() {
                   {p.error && <small className="neg" style={{ display: 'block' }}>رفضه الخادم: {arabicError(p.error)}</small>}
                 </span>
                 {p.error
-                  ? <button className="link danger" onClick={() => confirm('حذف هذه الحركة من الهاتف؟') && dropOut(p.client_ref)}>حذف</button>
+                  ? (
+                    <span style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+                      <button className="link" onClick={() => { retryOut(p.client_ref); syncOuts().finally(load) }}>إعادة المحاولة</button>
+                      <button className="link danger" onClick={() => confirm('حذف هذه الحركة من الهاتف؟') && dropOut(p.client_ref)}>حذف</button>
+                    </span>
+                  )
                   : <span className="muted">{new Date(p.at).toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit' })}</span>}
               </li>
             ))}
@@ -283,7 +295,7 @@ export default function ScanOut() {
           <label>ملاحظة
             <input value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
-          <button type="submit" className="big-btn">تأكيد الإخراج</button>
+          <button type="submit" className="big-btn" disabled={saving}>{saving ? 'جارٍ الإخراج…' : 'تأكيد الإخراج'}</button>
         </form>
       )}
 

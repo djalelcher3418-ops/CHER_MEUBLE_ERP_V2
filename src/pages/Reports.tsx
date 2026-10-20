@@ -46,8 +46,10 @@ export default function Reports() {
       const d = new Date(y, m - 6 + k, 1)
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     })
+    // تغيير الشهر بسرعة: نتجاهل الرد القديم إن وصل بعد الجديد
+    let stale = false
     Promise.all(months.map((mm) => { const r = monthRange(mm); return supabase.rpc('month_summary', { p_from: r.from, p_to: r.to }) }))
-      .then((res) => setTrend(res.map((r, k) => {
+      .then((res) => !stale && setTrend(res.map((r, k) => {
         const s = (r.data ?? {}) as Partial<MonthSummary>
         return {
           label: MONTHS[Number(months[k].slice(5)) - 1],
@@ -55,6 +57,7 @@ export default function Reports() {
           spent: Number(s.suppliers ?? 0) + Number(s.payroll ?? 0) + Number(s.advances ?? 0) + Number(s.expenses ?? 0),
         }
       })))
+    return () => { stale = true }
   }, [month])
 
   async function runExport(kind: 'month' | 'backup') {
@@ -72,11 +75,13 @@ export default function Reports() {
 
   useEffect(() => {
     const { from, to } = monthRange(month)
+    let stale = false
     Promise.all([
       // المجاميع تُحسب في قاعدة البيانات، فلا يضيع شيء مهما كثرت الحركات
       supabase.rpc('month_summary', { p_from: from, p_to: to }),
       supabase.from('order_totals').select('*').eq('status', 'delivered').gte('delivered_on', from).lte('delivered_on', to).order('delivered_on'),
     ]).then(([ms, del]) => {
+      if (stale) return
       const err = ms.error ?? del.error
       if (err) setError(arabicError(err))
       const s = (ms.data ?? {}) as Partial<MonthSummary>
@@ -92,6 +97,7 @@ export default function Reports() {
         delivered: (del.data as OrderTotal[]) ?? [],
       })
     })
+    return () => { stale = true }
   }, [month])
 
   const label = monthRange(month).label

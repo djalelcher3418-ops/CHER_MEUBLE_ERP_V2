@@ -51,6 +51,10 @@ export function enqueueOut(p: PendingOut) {
 export function dropOut(ref: string) {
   store(pendingOuts().filter((x) => x.client_ref !== ref))
 }
+/** حركة رفضها الخادم: تُعاد إلى الطابور لتُرسل مرة أخرى (بعد أن يُصلح سبب الرفض) */
+export function retryOut(ref: string) {
+  store(pendingOuts().map((x) => (x.client_ref === ref ? { ...x, error: undefined } : x)))
+}
 
 /** رقم فريد للحركة: إن أُرسلت مرتين (انقطع الإنترنت بعد الحفظ) تُسجَّل مرة واحدة */
 export const newRef = () =>
@@ -61,9 +65,11 @@ export const newRef = () =>
 /** يرسل حركة إخراج واحدة. يعيد null عند النجاح، أو الخطأ */
 export async function sendOut(p: Omit<PendingOut, 'name' | 'unit_label' | 'at' | 'error'>): Promise<unknown> {
   const row = { material_id: p.material_id, type: 'out', qty: p.qty, note: p.note, order_id: p.order_id, created_by: p.created_by, client_ref: p.client_ref }
-  const { error } = await supabase.from('stock_movements').upsert(row, { onConflict: 'client_ref', ignoreDuplicates: true })
+  // إدخال عادي: إن كانت الحركة محفوظة من قبل يرفضها الفهرس الفريد (23505) قبل أن يتغيّر المخزون، فهي مسجّلة
+  const { error } = await supabase.from('stock_movements').insert(row)
+  if (error?.code === '23505' && /client_ref/.test(`${error.message} ${error.details ?? ''}`)) return null
   // قبل ملف 017 لا يوجد العمود client_ref: نرسل بدونه
-  if (error && /client_ref|ON CONFLICT|no unique/i.test(error.message)) {
+  if (error && /client_ref/i.test(error.message)) {
     const { client_ref: _ref, ...plain } = row
     void _ref
     return (await supabase.from('stock_movements').insert(plain)).error

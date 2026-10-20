@@ -27,7 +27,7 @@ const json = (body: unknown, status = 200) =>
 const fail = (message: string, status = 400, code?: string) => json({ error: message, code }, status)
 
 const UNITS = ['piece', 'sheet', 'meter', 'm2', 'kg', 'liter', 'roll', 'box'] as const
-const MAX_IMAGE_B64 = 7_000_000 // ~5 ميغابايت بعد فك الترميز (حدّ الصورة عند Claude)
+const MAX_IMAGE_B64 = 6_900_000 // أقل من 5 ميغابايت بعد فك الترميز (حدّ الصورة عند Claude)
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] })
 
@@ -135,7 +135,7 @@ class ReadError extends Error {
  */
 function provider(): { name: 'gemini' | 'claude'; key: string } | null {
   const anthropic = (Deno.env.get('ANTHROPIC_API_KEY') ?? '').trim()
-  const google = (Deno.env.get('GEMINI_API_KEY') ?? Deno.env.get('GOOGLE_API_KEY') ?? '').trim() || (anthropic.startsWith('AIza') ? anthropic : '')
+  const google = (Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY') || '').trim() || (anthropic.startsWith('AIza') ? anthropic : '')
   const claude = anthropic && !anthropic.startsWith('AIza') ? anthropic : ''
   const want = (Deno.env.get('INVOICE_AI') ?? '').toLowerCase()
   if (want === 'claude' && claude) return { name: 'claude', key: claude }
@@ -145,8 +145,8 @@ function provider(): { name: 'gemini' | 'claude'; key: string } | null {
 }
 
 /** Claude Opus 5.5: صورة + structured outputs، مع بديل تلقائي عند الرفض */
-async function readWithClaude(image: string, task: string): Promise<string> {
-  const client = new Anthropic()
+async function readWithClaude(key: string, image: string, task: string): Promise<string> {
+  const client = new Anthropic({ apiKey: key })
   const res = await client.beta.messages.create({
     model: 'claude-opus-5-5',
     max_tokens: 16000,
@@ -291,7 +291,7 @@ Known materials (for each line's match): ${JSON.stringify(itemNames)}`
 Known customers: ${JSON.stringify(partyNames)}`
 
   try {
-    const raw = ai.name === 'gemini' ? await readWithGemini(ai.key, image, task) : await readWithClaude(image, task)
+    const raw = ai.name === 'gemini' ? await readWithGemini(ai.key, image, task) : await readWithClaude(ai.key, image, task)
     const scan = clean(JSON.parse(raw) as Scan, partyNames, itemNames)
     return json({ kind, ...scan })
   } catch (e) {

@@ -157,6 +157,8 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
   const [scan, setScan] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // رقم الشراء إن حُفظ ولم تُحفظ الدفعة: إعادة المحاولة تكمل الدفعة فقط ولا تكرر الشراء
+  const savedId = useRef<number | null>(null)
 
   const total = lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0)
 
@@ -168,7 +170,7 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
   function applyScan(r: InvoiceScan, file: File) {
     pickPhoto(file)
     const sup = suppliers.find((x) => x.name === r.party_match) ?? bestMatch(r.party_name, suppliers)
-    if (sup) setSupplierId(String(sup.id))
+    setSupplierId(sup ? String(sup.id) : '')
     setNewSupplier(!sup && r.party_name ? { name: r.party_name, phone: phoneDigits(r.party_phone) || null } : null)
     if (r.invoice_date) setDate(r.invoice_date)
     if (r.invoice_ref) setRef(r.invoice_ref)
@@ -177,7 +179,7 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
       const price = linePrice(l)
       return {
         material_id: m ? String(m.id) : '',
-        qty: l.qty != null ? String(l.qty) : '',
+        qty: l.qty != null ? String(l.qty) : l.line_total != null ? '1' : '',
         unit_price: price != null ? String(price) : '',
         scanned: { name: l.description, unit: l.unit },
       }
@@ -188,8 +190,10 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
   }
 
   async function addSupplier() {
-    if (!newSupplier) return
+    if (!newSupplier || busy) return
+    setBusy(true)
     const { data, error } = await supabase.from('suppliers').insert({ name: newSupplier.name, phone: newSupplier.phone }).select('*').single()
+    setBusy(false)
     if (error) return setError(arabicError(error))
     const s = data as Supplier
     setSuppliers([...suppliers, s].sort((a, b) => a.name.localeCompare(b.name, 'ar')))
@@ -199,8 +203,10 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
 
   async function addMaterial(i: number) {
     const sc = lines[i].scanned
-    if (!sc) return
+    if (!sc || busy) return
+    setBusy(true)
     const { data, error } = await supabase.from('materials').insert({ name: sc.name, unit: sc.unit ?? 'piece' }).select('*').single()
+    setBusy(false)
     if (error) return setError(arabicError(error))
     const m = data as Material
     setMaterials([...materials, m].sort((a, b) => a.name.localeCompare(b.name, 'ar')))
@@ -225,31 +231,36 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
     const valid = lines.filter((l) => l.material_id && Number(l.qty) > 0)
     if (!supplierId) return setError('اختر المورد')
     if (!valid.length) return setError('أضف مادة واحدة على الأقل')
+    if (busy) return
     setBusy(true)
     setError('')
 
-    const p = await supabase
-      .from('purchases')
-      .insert({ supplier_id: Number(supplierId), purchase_date: date, invoice_ref: ref.trim() || null })
-      .select('id')
-      .single()
-    if (p.error) { setBusy(false); return setError(arabicError(p.error)) }
-    const purchaseId = (p.data as { id: number }).id
+    let purchaseId = savedId.current
+    if (purchaseId == null) {
+      const p = await supabase
+        .from('purchases')
+        .insert({ supplier_id: Number(supplierId), purchase_date: date, invoice_ref: ref.trim() || null })
+        .select('id')
+        .single()
+      if (p.error) { setBusy(false); return setError(arabicError(p.error)) }
+      purchaseId = (p.data as { id: number }).id
 
-    const items = await supabase.from('purchase_items').insert(
-      valid.map((l) => ({ purchase_id: purchaseId, material_id: Number(l.material_id), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
-    )
-    if (items.error) {
-      await supabase.from('purchases').delete().eq('id', purchaseId)
-      setBusy(false)
-      return setError(arabicError(items.error))
+      const items = await supabase.from('purchase_items').insert(
+        valid.map((l) => ({ purchase_id: purchaseId, material_id: Number(l.material_id), qty: Number(l.qty), unit_price: Number(l.unit_price) || 0 })),
+      )
+      if (items.error) {
+        await supabase.from('purchases').delete().eq('id', purchaseId)
+        setBusy(false)
+        return setError(arabicError(items.error))
+      }
+      savedId.current = purchaseId
     }
 
     if (Number(paid) > 0) {
       const pay = await supabase.from('supplier_payments').insert({
         supplier_id: Number(supplierId), purchase_id: purchaseId, amount: Number(paid), paid_on: date, method,
       })
-      if (pay.error) { setBusy(false); return setError('حُفظ الشراء لكن الدفعة لم تُحفظ: ' + arabicError(pay.error)) }
+      if (pay.error) { setBusy(false); return setError(`حُفظ الشراء رقم ${purchaseId} لكن الدفعة لم تُحفظ: ${arabicError(pay.error)} — اضغط «حفظ» لإعادة محاولة الدفعة فقط.`) }
     }
     if (photo) {
       try {

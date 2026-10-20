@@ -76,7 +76,7 @@ export default function TrendCharts({ data }: { data: MonthPoint[] }) {
 
   const hit = (i: number) => (
     <rect key={`hit-${i}`} x={bandX(i)} y={0} width={band} height={H} fill="transparent"
-      onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)} onPointerLeave={() => setHover(null)}
+      onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)} onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHover(null) }}
       role="img" aria-label={`${data[i].label}: المقبوض ${dzd(data[i].received)}، المصروف ${dzd(data[i].spent)}، الصافي ${dzd(nets[i])}`} />
   )
 
