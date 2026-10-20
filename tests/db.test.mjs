@@ -672,6 +672,26 @@ await q(`insert into stock_movements (material_id, type, qty, unit_cost) values 
 const [fm] = await q(`select qty, avg_cost from materials where id = ${foam.id}`)
 ok(Number(fm.qty) === 10 && Number(fm.avg_cost) === 3300, `a purchase-in still updates stock and average cost (8 × 3000 + 2 × 4500) / 10 = 3300 (got ${fm.avg_cost})`)
 
+// --- 019: last purchase price
+await db.exec('reset role')
+await db.exec(fs.readFileSync(R + '/supabase/019_last_price.sql', 'utf8'))
+await db.exec(fs.readFileSync(R + '/supabase/019_last_price.sql', 'utf8'))
+await as(ADMIN)
+ok((await q(`select erp_schema_version() as v`))[0].v === 19, 'schema version is 19')
+const [sup19] = await q(`select id from suppliers limit 1`)
+const [pOld] = await q(`insert into purchases (supplier_id, purchase_date) values (${sup19.id}, '2026-01-10') returning id`)
+const [pNew] = await q(`insert into purchases (supplier_id, purchase_date) values (${sup19.id}, '2026-02-10') returning id`)
+await q(`insert into purchase_items (purchase_id, material_id, qty, unit_price) values (${pNew.id}, ${foam.id}, 1, 5200)`)
+await q(`insert into purchase_items (purchase_id, material_id, qty, unit_price) values (${pOld.id}, ${foam.id}, 1, 4100)`)
+await q(`insert into purchase_items (purchase_id, material_id, qty, unit_price) values (${pNew.id}, ${foam.id}, 1, 0)`)
+const [lp] = await q(`select last_price, last_date from material_last_price where material_id = ${foam.id}`)
+ok(Number(lp.last_price) === 5200, `the last purchase price is the latest invoice by date, not the average or the last typed line, and a line without price is ignored (got ${lp.last_price})`)
+const [avg19] = await q(`select avg_cost from materials where id = ${foam.id}`)
+ok(Number(avg19.avg_cost) !== 5200, 'the last price is shown separately from the average cost')
+await as(WORKER)
+ok((await q(`select * from material_last_price`)).length === 0, 'workers do not see purchase prices')
+await db.exec('reset role')
+
 // --- anon
 await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
 let anonBlocked = false; try { await q(`select * from orders_public`) } catch { anonBlocked = true }

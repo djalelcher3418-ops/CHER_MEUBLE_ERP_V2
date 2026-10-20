@@ -156,9 +156,17 @@
 
 يتطلب: `018_review_fixes.sql`، وإعادة نشر الدوال `send-push` و`manage-users` و`scan-invoice` و`backup`.
 
+## المرحلة 20: سعر الشراء
+
+- عند اختيار مادة في «فاتورة شراء» يظهر أولًا آخر سعر اشتُريت به (لا متوسط السعر)، ويمكن تغييره، مع رابط للرجوع إليه.
+- صفحة المواد تعرض «سعر الشراء» (آخر سعر وتاريخه) والقيمة به.
+- تكلفة المواد في الطلبيات والأرباح تبقى محسوبة بمتوسط السعر في قاعدة البيانات.
+
+يتطلب: `019_last_price.sql`.
+
 ## قاعدة البيانات
 - `supabase/001_phase1.sql` (مُشغَّل مسبقًا على Supabase).
-- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql` ثم `014_team_social.sql` ثم `015_tetris.sql` ثم `016_purchase_photo.sql` ثم `017_catalog_planning.sql` ثم `018_review_fixes.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
+- `supabase/002_phase2.sql` ثم `003_phase3.sql` ثم `004_phase4.sql` ثم `005_messages.sql` ثم `006_push.sql` ثم `007_accounts.sql` ثم `008_version.sql` ثم `009_hardening.sql` ثم `010_photos_tracking.sql` ثم `011_quotes.sql` ثم `012_bed_size.sql` ثم `013_fabric_legs.sql` ثم `014_team_social.sql` ثم `015_tetris.sql` ثم `016_purchase_photo.sql` ثم `017_catalog_planning.sql` ثم `018_review_fixes.sql` ثم `019_last_price.sql`: كل ملف يُشغَّل **مرة واحدة** وبالترتيب، من Supabase → SQL Editor → New query → الصق الملف → Run.
 
 ## التشغيل على الكمبيوتر
 ```

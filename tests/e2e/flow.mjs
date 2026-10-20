@@ -469,6 +469,25 @@ await step('quote', async () => {
   ok(true, 'the converted order appears on the workshop board')
 })
 
+await step('last purchase price is filled first, not the average', async () => {
+  const mdf = await one(`select m.id, m.avg_cost, i.unit_price from materials m join purchase_items i on i.material_id = m.id join purchases p on p.id = i.purchase_id
+    where m.name = 'MDF 18 مم' and i.unit_price > 0 order by p.purchase_date desc, i.id desc limit 1`)
+  await go(p, '/purchases')
+  await p.getByRole('button', { name: '+ فاتورة شراء' }).click()
+  const m = modal(p)
+  const row = m.locator('tbody tr').first()
+  await p.waitForTimeout(700)
+  await row.getByLabel('المادة').selectOption(String(mdf.id))
+  const price = await row.getByLabel('سعر الوحدة').inputValue()
+  ok(Number(price) === Number(mdf.unit_price), `choosing a material fills its last purchase price (${price}; average is ${mdf.avg_cost})`)
+  await row.getByLabel('سعر الوحدة').fill('999')
+  ok(await row.getByRole('button', { name: /آخر شراء/ }).count() === 1, 'a typed price keeps a one-tap link back to the last purchase price')
+  await m.getByRole('button', { name: 'إغلاق' }).first().click().catch(() => p.keyboard.press('Escape'))
+  await go(p, '/materials')
+  const cell = p.locator('tr', { hasText: 'MDF 18 مم' }).locator('td').nth(4)
+  ok((await cell.innerText()).replace(/\D/g, '').startsWith(String(Math.round(Number(mdf.unit_price)))), 'the materials list shows the purchase price')
+})
+
 await step('purchase from an invoice photo', async () => {
   await go(p, '/purchases')
   await p.getByRole('button', { name: '+ فاتورة شراء' }).click()

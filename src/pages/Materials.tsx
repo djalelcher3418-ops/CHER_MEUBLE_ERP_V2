@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import Barcode from '../components/Barcode'
 import Modal from '../components/Modal'
+import { loadLastPrices, type LastPrice } from '../lib/prices'
 import { arabicError, dateTime, dzd, num, supabase } from '../lib/supabase'
 import { UNIT_LABELS, type Category, type Material, type StockMovement, type Unit } from '../lib/types'
 
@@ -30,12 +31,15 @@ export default function Materials() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [printing, setPrinting] = useState(false)
   const [error, setError] = useState('')
+  // سعر الشراء المعروض: آخر سعر اشتُريت به المادة (وليس المتوسط)
+  const [lastPrices, setLastPrices] = useState<Map<number, LastPrice>>(new Map())
 
   async function load() {
     const [m, c] = await Promise.all([
       supabase.from('materials').select('*').eq('active', true).order('name'),
       supabase.from('material_categories').select('*').order('id'),
     ])
+    loadLastPrices().then(setLastPrices, () => {})
     if (m.error) setError(arabicError(m.error))
     setItems((m.data as Material[]) ?? [])
     setCats((c.data as Category[]) ?? [])
@@ -156,7 +160,7 @@ export default function Materials() {
               <th>المادة</th>
               <th>الصنف</th>
               <th>الكمية</th>
-              <th>متوسط السعر</th>
+              <th>سعر الشراء</th>
               <th>القيمة</th>
               <th>الباركود</th>
               <th></th>
@@ -165,6 +169,8 @@ export default function Materials() {
           <tbody>
             {shown.map((m) => {
               const low = Number(m.qty) <= Number(m.min_qty)
+              const last = lastPrices.get(m.id)
+              const price = last ? last.price : Number(m.avg_cost)
               return (
                 <tr key={m.id} className={low ? 'low' : ''}>
                   <td><input type="checkbox" checked={selected.has(m.id)} onChange={() => toggle(m.id)} /></td>
@@ -174,8 +180,11 @@ export default function Materials() {
                     {num(m.qty)} {UNIT_LABELS[m.unit]}
                     {low && <span className="badge">ناقصة</span>}
                   </td>
-                  <td>{dzd(m.avg_cost)}</td>
-                  <td>{dzd(Number(m.qty) * Number(m.avg_cost))}</td>
+                  <td>
+                    {dzd(price)}
+                    {last?.date && <small className="muted" style={{ display: 'block' }}>{last.date}</small>}
+                  </td>
+                  <td>{dzd(Number(m.qty) * price)}</td>
                   <td dir="ltr">{m.barcode}</td>
                   <td className="actions">
                     <button className="link" onClick={() => setDraft({

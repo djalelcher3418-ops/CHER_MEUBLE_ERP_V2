@@ -4,13 +4,15 @@ import Modal from '../components/Modal'
 import ScanInvoiceButton, { ScanSummary } from '../components/ScanInvoice'
 import { signedUrls } from '../lib/chat'
 import { linePrice, phoneDigits, type InvoiceScan } from '../lib/invoiceScan'
+import { loadLastPrices, type LastPrice } from '../lib/prices'
 import { removePurchasePhoto, savePurchasePhoto } from '../lib/purchasePhoto'
 import { arabicError, dzd, num, supabase, todayISO } from '../lib/supabase'
 import { bestMatch } from '../lib/text'
 import { PAY_LABELS, UNIT_LABELS, type Material, type PayMethod, type PurchaseTotal, type Supplier, type Unit } from '../lib/types'
 
 /** scanned: ما كُتب في الفاتورة المصوّرة لهذا السطر (للمراجعة وإضافة مادة جديدة) */
-type Line = { material_id: string; qty: string; unit_price: string; scanned?: { name: string; unit: Unit | null } }
+/** auto: السعر مملوء تلقائيًا من آخر شراء (يتغيّر إن تغيّرت المادة، ما لم يُكتب يدويًا) */
+type Line = { material_id: string; qty: string; unit_price: string; auto?: boolean; scanned?: { name: string; unit: Unit | null } }
 const emptyLine: Line = { material_id: '', qty: '', unit_price: '' }
 
 interface ItemRow {
@@ -159,6 +161,18 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
   const [error, setError] = useState('')
   // رقم الشراء إن حُفظ ولم تُحفظ الدفعة: إعادة المحاولة تكمل الدفعة فقط ولا تكرر الشراء
   const savedId = useRef<number | null>(null)
+  // آخر سعر شراء لكل مادة: يظهر أولًا في خانة السعر عند اختيار المادة (لا متوسط السعر)
+  const [lastPrices, setLastPrices] = useState<Map<number, LastPrice>>(new Map())
+  useEffect(() => { loadLastPrices().then(setLastPrices, () => {}) }, [])
+  const lastOf = (id: string) => lastPrices.get(Number(id))
+
+  /** اختيار مادة لسطر: السعر يأتي من آخر شراء لها، إلا إن كُتب السعر يدويًا */
+  function pickMaterial(i: number, id: string) {
+    const l = lines[i]
+    if (l.unit_price && !l.auto) return setLine(i, { material_id: id })
+    const last = lastOf(id)
+    setLine(i, { material_id: id, unit_price: last ? String(last.price) : '', auto: !!last })
+  }
 
   const total = lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0)
 
@@ -220,7 +234,8 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
     if (!m) return setError(`لا توجد مادة بالباركود ${scan}`)
     setError('')
     const empty = lines.findIndex((l) => !l.material_id)
-    const line = { material_id: String(m.id), qty: '1', unit_price: m.avg_cost ? String(m.avg_cost) : '' }
+    const last = lastOf(String(m.id))
+    const line = { material_id: String(m.id), qty: '1', unit_price: last ? String(last.price) : '', auto: !!last }
     if (empty >= 0) setLine(empty, line)
     else setLines([...lines, line])
     setScan('')
@@ -309,7 +324,7 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
                 return (
                   <tr key={i}>
                     <td><div className="mat-cell">
-                      <select value={l.material_id} onChange={(e) => setLine(i, { material_id: e.target.value })} aria-label="المادة">
+                      <select value={l.material_id} onChange={(e) => pickMaterial(i, e.target.value)} aria-label="المادة">
                         <option value="">— اختر —</option>
                         {materials.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                       </select>
@@ -323,7 +338,15 @@ function NewPurchase({ suppliers: initialSuppliers, materials: initialMaterials,
                       )}
                     </div></td>
                     <td><input type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} placeholder={m ? UNIT_LABELS[m.unit] : ''} /></td>
-                    <td><input type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
+                    <td>
+                      <input type="number" step="any" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value, auto: false })} aria-label="سعر الوحدة" />
+                      {(() => {
+                        const last = lastOf(l.material_id)
+                        return last && String(last.price) !== l.unit_price
+                          ? <button type="button" className="link last-price" onClick={() => setLine(i, { unit_price: String(last.price), auto: true })}>آخر شراء: {dzd(last.price)}</button>
+                          : last ? <small className="muted last-price">آخر سعر شراء</small> : null
+                      })()}
+                    </td>
                     <td>{dzd((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</td>
                     <td><button type="button" className="link danger" onClick={() => setLines(lines.length > 1 ? lines.filter((_, k) => k !== i) : [{ ...emptyLine }])}>✕</button></td>
                   </tr>

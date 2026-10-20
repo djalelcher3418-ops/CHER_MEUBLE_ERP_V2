@@ -61,6 +61,10 @@ const DB_CHECKS: { key: string; label: string; fix: string; probe: Probe; okIf?:
     key: 'p18', label: 'إصلاحات المراجعة (المخزون، الخصوصية، التنبيهات)', fix: 'شغّل supabase/018_review_fixes.sql',
     probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 18,
   },
+  {
+    key: 'p19', label: 'آخر سعر شراء للمواد', fix: 'شغّل supabase/019_last_price.sql',
+    probe: () => supabase.rpc('erp_schema_version'), okIf: (v) => Number(v) >= 19,
+  },
 ]
 
 /** فحص قاعدة البيانات: هل شُغّلت كل ملفات SQL؟ */
