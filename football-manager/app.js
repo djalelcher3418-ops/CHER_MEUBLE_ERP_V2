@@ -130,7 +130,7 @@
   }
 
   // ---------- الرأس والتبويبات ----------
-  const VIEWS = [['home', 'الرئيسية'], ['squad', 'الفريق'], ['tactics', 'التكتيك'], ['analysis', 'التحليل'], ['transfers', 'الانتقالات'], ['scouting', 'الكشافة'], ['training', 'التدريب'], ['league', 'الدوري'], ['finance', 'المالية'], ['inbox', 'البريد']];
+  const VIEWS = [['home', 'الرئيسية'], ['squad', 'الفريق'], ['tactics', 'التكتيك'], ['analysis', 'التحليل'], ['ai', 'المساعد الذكي'], ['transfers', 'الانتقالات'], ['scouting', 'الكشافة'], ['training', 'التدريب'], ['league', 'الدوري'], ['finance', 'المالية'], ['inbox', 'البريد']];
   function header() {
     const c = me();
     const unread = S.inbox.filter((x) => !x.read).length;
@@ -342,6 +342,7 @@
     if (t.width === 2 && prof.wide < 64) out.push({ c: 'acc', t: `اللعب الواسع مع أطراف متوسطة المستوى (${Math.round(prof.wide)})` });
     if (t.passing === 2 && prof.phyAtt >= 66) out.push({ c: 'good', t: `مهاجموك أقوياء بدنيًا (${Math.round(prof.phyAtt)}): الكرات الطويلة خيار جيد` });
     if (t.line === 2 && prof.defPace >= 72) out.push({ c: 'good', t: `مدافعوك سريعون (${Math.round(prof.defPace)}): يمكنهم اللعب بخط متقدم` });
+    if (t.school) out.push({ c: 'acc', t: `${schoolLabel(t.school)} تحتاج: ${FM.SCHOOLS[t.school].needs}` });
     const fam = S.fam[S.userClub][t.formation];
     if (fam < 50) out.push({ c: 'acc', t: `الانسجام مع خطة ${t.formation} ضعيف (${Math.round(fam)}%). اختر «الانسجام التكتيكي» في التدريب أو العب بها أكثر` });
     return { list: out, prof };
@@ -366,6 +367,7 @@
         <h3>الخطة</h3>
         <div class="chips">${Object.keys(FM.FORMATIONS).map((f) => `<button class="chip ${t.formation === f ? 'on' : ''}" data-a="formation" data-v="${f}">${f}</button>`).join('')}</div>
         <div><div class="row sp" style="font-size:.8rem"><span class="muted">الانسجام مع ${t.formation}</span><span class="num">${Math.round(fam)}%</span></div>${bar(fam)}</div>
+        ${t.school ? `<div class="pill acc" style="justify-self:start">${esc(schoolLabel(t.school))}: ${esc(FM.SCHOOLS[t.school].name)}</div>` : ''}
         <h3>أسلوب جاهز</h3>
         <div class="chips">${Object.keys(FM.PRESETS).map((k) => `<button class="chip txt ${t.preset === k ? 'on' : ''}" data-a="preset" data-v="${k}">${FM.PRESETS[k].name}</button>`).join('')}</div>
         <h3>التعليمات</h3>
@@ -388,7 +390,7 @@
         <h3>ملاحظات المحلل</h3>
         ${w.list.length ? `<ul class="warn-list">${w.list.map((x) => `<li class="${x.c}">${esc(x.t)}</li>`).join('')}</ul>` : '<div class="empty">التشكيلة سليمة تكتيكيًا</div>'}
       </section>
-    </div>`;
+    </div>${schoolsPanel()}`;
   }
 
   // ---------- التحليل ----------
@@ -421,8 +423,8 @@
     if (!UI.recCache || UI.recCache.key !== key) UI.recCache = { key, list: FM.recommend(S, S.userClub, myT(), oppId, ot, home) };
     const recs = UI.recCache.list;
     const seen = new Set();
-    const top = recs.filter((r) => { const k = r.preset; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4);
-    const current = recs.find((r) => r.formation === myT().formation && r.preset === myT().preset);
+    const top = recs.filter((r) => { const k = r.school || r.preset; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4);
+    const current = recs.find((r) => r.formation === myT().formation && (myT().school ? r.school === myT().school : r.preset === myT().preset));
     const sq = FM.squadOf(S, oppId).sort((a, b) => b.ovr - a.ovr);
     const keyP = sq.slice(0, 3);
     const tb = FM.table(S);
@@ -434,10 +436,11 @@
       <div class="stack">
         <section class="panel">
           <div class="row" style="gap:14px">${crest(opp, 48)}<div><div class="eyebrow">${home ? 'نستقبل' : 'نحل ضيفًا على'}</div><h2>${esc(opp.name)}</h2><div class="row muted" style="font-size:.84rem"><span>المركز ${num(tb.indexOf(orow) + 1)}</span>${formChips(orow.form)}<span>أهداف ${num(orow.gf)} له · ${num(orow.ga)} عليه</span></div></div></div>
+          ${S.oppPlan && S.oppPlan.reason && S.oppPlan.key.endsWith('-' + oppId) ? `<div class="pill info" style="margin-top:12px;white-space:normal">${esc(S.oppPlan.reason)}</div>` : ''}
           <div class="grid g2" style="margin-top:16px">
             <div>${tacticPitch(ot, opp, false)}</div>
             <div class="stack">
-              <dl class="kv"><dt>الخطة المتوقعة</dt><dd class="num">${ot.formation}</dd><dt>الأسلوب</dt><dd>${esc(FM.PRESETS[style].name)}</dd>${Object.keys(FM.TACTIC_KEYS).map((k) => `<dt>${FM.TACTIC_AR[k]}</dt><dd>${FM.TACTIC_KEYS[k][ot[k]]}</dd>`).join('')}</dl>
+              <dl class="kv"><dt>الخطة المتوقعة</dt><dd class="num">${ot.formation}</dd><dt>الأسلوب</dt><dd>${esc(ot.school ? schoolLabel(ot.school) + ': ' + FM.SCHOOLS[ot.school].name : FM.PRESETS[style].name)}</dd>${Object.keys(FM.TACTIC_KEYS).map((k) => `<dt>${FM.TACTIC_AR[k]}</dt><dd>${FM.TACTIC_KEYS[k][ot[k]]}</dd>`).join('')}</dl>
               <h3>أخطر لاعبيه</h3>${keyP.map((p) => `<div class="row sp" data-a="player" data-id="${p.id}" style="cursor:pointer"><span>${pos(p.pos)} ${esc(p.name)}</span><span class="row">${p.st.goals ? `<span class="muted num">${p.st.goals} هدف</span>` : ''}${ovr(p.ovr)}</span></div>`).join('')}
             </div>
           </div>
@@ -458,7 +461,7 @@
         </section>
         <section class="panel"><h3>توصيات المحلل</h3>
           ${current ? `<div class="muted" style="font-size:.84rem;margin-bottom:10px">خطتك الحالية: فارق أهداف متوقع <b class="num ltr ${current.diff >= 0 ? 'good' : 'bad'}">${current.diff >= 0 ? '+' : ''}${current.diff.toFixed(2)}</b></div>` : ''}
-          <div class="stack" style="gap:8px">${top.map((r) => `<div class="rec"><div class="t">${esc(FM.PRESETS[r.preset].name)} · <span class="num">${r.formation}</span></div><button class="btn sm" data-a="applyRec" data-p="${r.preset}" data-f="${r.formation}">طبّق</button><div class="d">متوقع ${pair(r.xgf.toFixed(1), r.xga.toFixed(1))}${r.fam < 50 ? ` · انسجام ضعيف ${Math.round(r.fam)}%` : ''}</div></div>`).join('')}</div>
+          <div class="stack" style="gap:8px">${top.map((r) => `<div class="rec"><div class="t">${esc(r.school ? schoolLabel(r.school) : FM.PRESETS[r.preset].name)} · <span class="num">${r.formation}</span></div><button class="btn sm" data-a="applyRec" data-p="${r.preset || ''}" data-s="${r.school || ''}" data-f="${r.formation}">طبّق</button><div class="d">متوقع ${pair(r.xgf.toFixed(1), r.xga.toFixed(1))}${r.fam < 50 ? ` · انسجام ضعيف ${Math.round(r.fam)}%` : ''}</div></div>`).join('')}</div>
           <p class="muted" style="font-size:.78rem;margin:10px 0 0">التوصية تحسب التشكيلة الأنسب لكل خطة تلقائيًا. الانسجام الضعيف مع خطة جديدة يخصم من الأداء.</p>
         </section>
       </div>
@@ -492,7 +495,7 @@
         <section class="panel"><h3>تقييمات اللاعبين</h3><div class="grid g2">${[A, B].map((sd) => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>${esc(FM.club(S, sd.clubId).short)}</th><th class="n">دق</th><th class="n">تقييم</th></tr></thead><tbody>${sd.ratings.map((r) => `<tr class="click" data-a="player" data-id="${r.id}"><td>${pos(r.role)} ${esc(S.players[r.id] ? shortName(S.players[r.id].name) : '—')}</td><td class="n">${r.min}</td><td class="n"><b class="${r.r >= 7.5 ? 'good' : r.r < 6 ? 'bad' : ''}">${r.r.toFixed(1)}</b></td></tr>`).join('')}</tbody></table></div>`).join('')}</div></section>
       </div>
       <div class="stack">
-        <section class="panel"><h3>ملاحظات المحلل</h3>${R.notes.length ? `<ul class="warn-list">${R.notes.map((n) => `<li class="${n.good ? 'good' : 'bad'}">${esc(n.text)}</li>`).join('')}</ul>` : '<div class="empty">مباراة متكافئة بلا ملاحظات بارزة</div>'}</section>
+        <section class="panel"><h3>ملاحظات المحلل</h3>${UI.ai.sample ? '<button class="btn sm" data-a="aiQuick" data-k="last" style="margin-bottom:10px">اطلب تحليلًا أعمق من المساعد الذكي</button>' : ''}${R.notes.length ? `<ul class="warn-list">${R.notes.map((n) => `<li class="${n.good ? 'good' : 'bad'}">${esc(n.text)}</li>`).join('')}</ul>` : '<div class="empty">مباراة متكافئة بلا ملاحظات بارزة</div>'}</section>
         <section class="panel"><h3>الإحصاءات</h3><div class="stat-row" style="font-weight:600"><span class="num">${esc(ca.short)}</span><span></span><span class="num">${esc(cb.short)}</span></div>${rows.map(([l, a, b]) => `<div class="stat-row"><span class="num">${a}</span><span class="lbl">${l}</span><span class="num">${b}</span></div>`).join('')}</section>
         <section class="panel"><h3>مناطق اللعب <span class="muted">أين كانت الكرة؟ (اتجاه هجومنا ◂)</span></h3>${heatmap(R.zones, homeFirst)}</section>
         <section class="panel"><h3>الأحداث</h3><div class="feed">${keyEv.map((e) => `<div class="e ${e.type}"><span class="m">${e.min}'</span><span>${esc(e.text)}</span></div>`).join('') || '<div class="muted">—</div>'}</div></section>
@@ -734,11 +737,13 @@
         <div class="fixture"><div class="side">${crest(h, 50)}<div class="nm">${esc(h.name)}</div></div><div class="score muted">ضد</div><div class="side">${crest(a, 50)}<div class="nm">${esc(a.name)}</div></div></div>
         <div class="grid g2">
           <div>${tacticPitch(t, me(), false)}</div>
-          <div class="stack"><dl class="kv"><dt>الخطة</dt><dd class="num">${t.formation}</dd><dt>الأسلوب</dt><dd>${esc(t.preset && FM.PRESETS[t.preset] ? FM.PRESETS[t.preset].name : 'مخصص')}</dd>${Object.keys(FM.TACTIC_KEYS).map((k) => `<dt>${FM.TACTIC_AR[k]}</dt><dd>${FM.TACTIC_KEYS[k][t[k]]}</dd>`).join('')}<dt>الاحتياط</dt><dd>${t.bench.length} لاعبين</dd></dl>
+          <div class="stack"><dl class="kv"><dt>الخطة</dt><dd class="num">${t.formation}</dd><dt>الأسلوب</dt><dd>${esc(styleLabel(t))}</dd>${Object.keys(FM.TACTIC_KEYS).map((k) => `<dt>${FM.TACTIC_AR[k]}</dt><dd>${FM.TACTIC_KEYS[k][t[k]]}</dd>`).join('')}<dt>الاحتياط</dt><dd>${t.bench.length} لاعبين</dd></dl>
             ${problems.length || w.length ? `<ul class="warn-list">${problems.map((x) => `<li class="acc">${esc(x)}</li>`).join('')}${w.map((x) => `<li class="bad">${esc(x.t)}</li>`).join('')}</ul>` : '<div class="pill good" style="justify-self:start">التشكيلة جاهزة</div>'}
           </div>
         </div>
         <div class="row" style="justify-content:flex-end;border-top:1px solid var(--line);padding-top:14px">
+          ${S.oppPlan && S.oppPlan.reason && S.oppPlan.key.endsWith('-' + oppId) ? `<span class="pill info" style="white-space:normal;margin-inline-end:auto">${esc(S.oppPlan.reason)}</span>` : ''}
+          ${UI.ai.sample ? '<button class="btn ghost" data-a="aiQuick" data-k="plan">اسأل المساعد الذكي</button>' : ''}
           <button class="btn ghost" data-a="goTactics">عدّل التكتيك</button>
           <button class="btn" data-a="playInstant">النتيجة مباشرة</button>
           <button class="btn pri" data-a="playLive">قُد المباراة من الخط ◂</button>
@@ -1211,6 +1216,7 @@
         case 'league': body = leagueView(); break;
         case 'finance': body = financeView(); break;
         case 'inbox': body = inboxView(); break;
+        case 'ai': body = aiView(); break;
         case 'match': body = matchView(); break;
         default: body = homeView();
       }
@@ -1272,7 +1278,8 @@
       FM.autoPick(S, S.userClub, t);
       UI.sel = null; save(); render();
     },
-    preset: (d) => { const t = myT(); const p = FM.PRESETS[d.v]; for (const k of Object.keys(FM.TACTIC_KEYS)) t[k] = p[k]; t.preset = d.v; save(); render(); },
+    preset: (d) => { const t = myT(); const p = FM.PRESETS[d.v]; for (const k of Object.keys(FM.TACTIC_KEYS)) t[k] = p[k]; t.preset = d.v; t.school = null; save(); render(); },
+    school: (d) => { applySchool(d.v); save(); toast(`اعتمدت ${schoolLabel(d.v)}: ${FM.SCHOOLS[d.v].name}`); },
     tset: (d) => { const t = myT(); t[d.k] = +d.v; t.preset = matchPreset(t); save(); render(); },
     autoPick: () => { FM.autoPick(S, S.userClub, myT()); UI.sel = null; save(); render(); },
     unsel: () => { UI.sel = null; render(); },
@@ -1346,7 +1353,9 @@
       }, 30);
     },
     applyRec: (d) => {
+      if (d.s) { applySchool(d.s); save(); toast(`طُبّقت ${schoolLabel(d.s)} · ${d.f}`); return; }
       const t = myT();
+      t.school = null;
       const p = FM.PRESETS[d.p];
       for (const k of Object.keys(FM.TACTIC_KEYS)) t[k] = p[k];
       t.preset = d.p;
@@ -1363,6 +1372,10 @@
     mSub: () => { const L = UI.match; const err = FM.substitute(S, L.m, L.us, L.out, L.inn); if (err) toast(err, true); L.out = null; L.inn = null; render(); },
     mSkip: () => { const L = UI.match; L.queue = []; L.world.beat = null; L.m.ai[L.us] = true; FM.simulate(S, L.m); L.paused = false; updateHud(false); renderMatchControls(); },
     mFinish: () => { cancelAnimationFrame(UI.match.raf); finishRound(UI.match.m); },
+    aiQuick: (d) => { const q = AI_PROMPTS.find((x) => x[0] === d.k); UI.modal = null; UI.view = 'ai'; render(); if (q) aiSend(q[2]); },
+    aiStop: () => { if (UI.ai.ctl) UI.ai.ctl.abort(); },
+    aiUndo: () => { if (UI.ai.undo) { Object.assign(myT(), UI.ai.undo); UI.ai.undo = null; save(); toast('أُعيدت خطتك السابقة'); } },
+    aiClear: () => { UI.ai.turns = []; S.aiTurns = []; UI.ai.error = null; save(); render(); },
     seasonGo: () => { S.seasonEnd = null; UI.modal = null; UI.view = 'home'; save(); render(); },
     newCareer: () => { clearSave(); S = null; UI.modal = null; UI.view = 'start'; render(); },
   };
@@ -1403,6 +1416,12 @@
     if (el.dataset.a !== 'closeBg') e.stopPropagation();
     fn(el.dataset, el, e);
   });
+  document.addEventListener('submit', (e) => {
+    if (e.target.id !== 'ai-form') return;
+    e.preventDefault();
+    const el = document.getElementById('ai-in');
+    if (el && el.value.trim()) aiSend(el.value);
+  });
   document.addEventListener('change', (e) => {
     const el = e.target.closest('[data-c]');
     if (el && C[el.dataset.c]) C[el.dataset.c](el.value, el);
@@ -1416,6 +1435,219 @@
     if (e.key === 'Escape' && UI.modal && UI.modal.type !== 'season') A.close();
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('g.tok')) { e.preventDefault(); A.slot(e.target.dataset); }
   });
+
+  // ---------- مدارس المدربين ----------
+  const schoolLabel = (k) => (k && FM.SCHOOLS[k] ? `مدرسة ${FM.SCHOOLS[k].coach}` : null);
+  const styleLabel = (t) => schoolLabel(t.school) || (t.preset && FM.PRESETS[t.preset] ? FM.PRESETS[t.preset].name : 'مخصص');
+  // ملاءمة المدرسة لفريقك: الصفات التي تحتاجها مقارنة بمستوى الفريق العام
+  function schoolFit(key) {
+    const t = Object.assign({}, myT(), FM.schoolInstr(key), { formation: FM.SCHOOLS[key].formation });
+    if (t.formation !== myT().formation) FM.autoPick(S, S.userClub, t);
+    const p = FM.previewProfile(S, S.userClub, t);
+    const m = {
+      guardiola: [p.passQ, p.defPace, p.mid], klopp: [p.avgFit, p.phyAtt, p.pace], mourinho: [p.def, p.pace, p.gk],
+      simeone: [p.def, p.phyDef, p.phyAtt], conte: [p.fullback, p.def, p.att], ancelotti: [p.att, p.mid, p.def],
+      bielsa: [p.avgFit, p.avgEff, p.pace], arteta: [p.phyDef, p.passQ, p.mid], dezerbi: [p.passQ, p.gk, p.pace], belmadi: [p.pace, p.wide, p.mid],
+    }[key];
+    const base = p.avgEff;
+    // اللياقة تُقارن بحد 85% لا بمستوى الفريق
+    const v = m.reduce((acc, x, i) => acc + ((key === 'klopp' || key === 'bielsa') && i === 0 ? (x - 85) * 0.6 : x - base), 0) / m.length;
+    return Math.round(Math.max(5, Math.min(98, 60 + v * 4)));
+  }
+  function schoolsPanel() {
+    const t = myT();
+    return `<section class="panel"><div class="row sp" style="margin-bottom:12px"><h3 style="margin:0">مدارس المدربين العالميين</h3><span class="muted" style="font-size:.82rem">كل مدرسة خطة وتعليمات وسمة خاصة يحسبها المحرك. الملاءمة تقارن ما تحتاجه المدرسة بصفات فريقك.</span></div>
+      <div class="schools">${Object.keys(FM.SCHOOLS).map((k) => {
+        const sc = FM.SCHOOLS[k];
+        const fit = schoolFit(k);
+        const on = t.school === k;
+        return `<article class="school ${on ? 'on' : ''}"><div class="row sp"><div><div class="coach">${esc(sc.coach)}</div><div class="sname">${esc(sc.name)}</div></div><span class="num">${sc.formation}</span></div>
+          <p>${esc(sc.desc)}</p><p class="muted needs">يحتاج: ${esc(sc.needs)}</p>
+          <div class="row sp"><span class="pill ${fit >= 65 ? 'good' : fit < 45 ? 'bad' : ''}">ملاءمة لفريقك ${num(fit + '%')}</span>${on ? '<span class="pill acc">المعتمدة</span>' : `<button class="btn sm" data-a="school" data-v="${k}">اعتمدها</button>`}</div></article>`;
+      }).join('')}</div></section>`;
+  }
+  function applySchool(key) {
+    const t = myT();
+    const sc = FM.SCHOOLS[key];
+    Object.assign(t, FM.schoolInstr(key));
+    t.school = key;
+    t.preset = null;
+    if (t.formation !== sc.formation) { t.formation = sc.formation; FM.autoPick(S, S.userClub, t); }
+  }
+
+  // ---------- المساعد الذكي (Claude) ----------
+  // يعمل حين تُفتح اللعبة داخل Claude: يقرأ بيانات الفريق عبر أدوات الصفحة، يجرّب الخطط في المحاكي، ويطبّق بطلبك.
+  UI.ai = { sample: undefined, tools: false, turns: [], busy: false, live: '', activity: [], undo: null, error: null };
+  if (window.claude && window.claude.use) {
+    window.claude.use('sample').then(async (s) => {
+      UI.ai.sample = s;
+      if (s) { try { const lim = await s.limits(); UI.ai.tools = !!(lim && lim.tools); } catch { UI.ai.tools = false; } }
+      if (UI.view === 'ai') render();
+    });
+  } else UI.ai.sample = null;
+
+  const AI_PROMPTS = [
+    ['plan', 'جهّز خطة المباراة القادمة', 'حلّل خصمنا القادم وجرّب في المحاكي خطتين أو ثلاثًا (منها مدرسة مدرب عالمي واحدة على الأقل) ثم اقترح الأفضل مع التشكيلة وسبب الاختيار. لا تطبّق شيئًا.'],
+    ['last', 'حلّل آخر مباراة', 'حلّل آخر مباراة لعبناها: لماذا كانت النتيجة هكذا، ما الذي نجح وما الذي فشل، وثلاثة تعديلات محددة للمباراة القادمة.'],
+    ['buy', 'من أشتري بميزانيتي؟', 'ما أضعف مركزين في تشكيلتنا؟ ابحث في السوق عن أفضل ثلاثة خيارات واقعية لكل مركز ضمن ميزانيتنا ورتّبها مع السبب.'],
+    ['youth', 'خطة تطوير المواهب', 'من هم أفضل الشباب في فريقنا؟ اقترح برنامج تدريب وتركيزًا فرديًا لكل واحد، ومن يستحق دقائق لعب أكثر.'],
+    ['press', 'الندوة الصحفية', 'اكتب ندوة صحفية قصيرة قبل مباراتنا القادمة: أربعة أسئلة من صحفيين جزائريين وإنجليز حسب دورينا، مع إجابات مقترحة لي بنبرة مدرب واثق، مبنية على وضعنا الحقيقي.'],
+  ];
+  function aiRules() {
+    const c = me(), lg = FM.userLeague(S);
+    const f = FM.userFixture(S);
+    const opp = f ? FM.club(S, f.h === S.userClub ? f.a : f.h) : null;
+    return `أنت مساعد المدرب ومحلل الأداء في لعبة «دكّة المدرب» لإدارة كرة القدم. المدرب الذي تحدّثه هو ${S.manager}، مدرب ${c.name} في ${lg.name}، موسم ${S.year}/${S.year + 1}، قبل الجولة ${S.week + 1} من ${lg.fixtures.length}. المركز الحالي ${FM.position(S, c.id)}، هدف المجلس: ${FM.targetText(S)}، الرصيد ${money(c.budget)}${opp ? `، المباراة القادمة ضد ${opp.name} ${f.h === S.userClub ? 'على أرضنا' : 'خارج أرضنا'} يوم ${FM.fixtureDate(S)}` : ''}.
+القواعد:
+- أجب بالعربية، باختصار ووضوح، بنقاط عملية. لا مقدمات طويلة.
+- استند فقط إلى ما تعيده الأدوات. لا تخترع لاعبين أو أرقامًا.
+- قبل التوصية بخطة جرّب خيارين أو ثلاثة على الأكثر بأداة simulate واذكر نسب الفوز.
+- لا تستعمل apply_plan إلا إذا طلب المدرب صراحة التطبيق.
+- مقاييس التعليمات: العقلية 0-4 (0 دفاعي جدًا، 4 هجومي جدًا). الضغط والإيقاع وعرض اللعب وخط الدفاع 0-2 (منخفض، متوسط، عالٍ). أسلوب التمرير 0-2 (قصير، مختلط، مباشر).
+- الخطط المتاحة: ${Object.keys(FM.FORMATIONS).join('، ')}. مدارس المدربين: ${Object.keys(FM.SCHOOLS).map((k) => `${k} (${FM.SCHOOLS[k].coach}: ${FM.SCHOOLS[k].name})`).join('، ')}.`;
+  }
+  const brief = (p) => {
+    const r = FM.potRange(p);
+    return { id: p.id, name: p.name, pos: p.pos, alt: p.alt, age: p.age, ovr: p.ovr, potential_stars: r[0] === r[1] ? r[0] : `${r[0]}-${r[1]}`, fitness: p.fit, morale: Math.round(p.morale), form: p.form.length ? +avgForm(p) : null, goals: p.st.goals, assists: p.st.assists, value_eur: p.value, wage_eur_week: p.wage, contract_years: p.contract, injured_weeks: p.inj || 0, suspended: !!p.susp, generated: !!p.gen };
+  };
+  function nextMatchData() {
+    const f = FM.userFixture(S);
+    if (!f) return { none: true };
+    const home = f.h === S.userClub, oppId = home ? f.a : f.h, opp = FM.club(S, oppId);
+    FM.validateLineup(S, S.userClub, myT());
+    FM.prepareAI(S, oppId, S.userClub);
+    const ot = S.tactics[oppId];
+    const e = home ? FM.expected(S, S.userClub, myT(), oppId, ot) : FM.expected(S, oppId, ot, S.userClub, myT());
+    const u = home ? 0 : 1, r = (o) => Object.fromEntries(['att', 'mid', 'def', 'gk', 'pace', 'defPace', 'passQ', 'phyAtt', 'phyDef', 'wide', 'fullback', 'avgFit'].map((k) => [k, Math.round(o[k])]));
+    const row = FM.table(S).findIndex((x) => x.id === oppId) + 1;
+    return {
+      date: FM.fixtureDate(S), venue: home ? `home, ${me().stadium}` : `away, ${opp.stadium}`, opponent: opp.name, opponent_position: row,
+      opponent_plan: { formation: ot.formation, school: ot.school, instructions: Object.fromEntries(Object.keys(FM.TACTIC_KEYS).map((k) => [k, ot[k]])), scouting_note: S.oppPlan && S.oppPlan.reason },
+      opponent_key_players: FM.squadOf(S, oppId).sort((a, b) => b.ovr - a.ovr).slice(0, 5).map((p) => ({ name: p.name, pos: p.pos, ovr: p.ovr, pace: p.a.pac, goals: p.st.goals })),
+      strength_us: r(e.P[u]), strength_them: r(e.P[1 - u]), expected_possession_us: Math.round(e.share[u] * 100), expected_goals: { us: +e.xg[u].toFixed(2), them: +e.xg[1 - u].toFixed(2) },
+      tactical_factors: e.factors.map((x) => ({ favours: (x.att === u) === (x.weight > 0) ? 'us' : 'them', text: x.text })),
+    };
+  }
+  function planFrom(input) {
+    const t = Object.assign({}, myT());
+    const form = String(input.formation || t.formation);
+    if (!FM.FORMATIONS[form]) throw new Error('خطة غير معروفة: ' + form);
+    const sc = input.school ? String(input.school) : null;
+    if (sc && !FM.SCHOOLS[sc]) throw new Error('مدرسة غير معروفة: ' + sc);
+    if (sc) Object.assign(t, FM.schoolInstr(sc));
+    t.school = sc; t.preset = null;
+    for (const k of Object.keys(FM.TACTIC_KEYS)) if (input[k] !== undefined && input[k] !== null) t[k] = Math.max(0, Math.min(FM.TACTIC_KEYS[k].length - 1, Math.round(+input[k])));
+    if (form !== t.formation) { t.formation = form; FM.autoPick(S, S.userClub, t); }
+    return t;
+  }
+  const PLAN_SCHEMA = { type: 'object', properties: { formation: { type: 'string', enum: Object.keys(FM.FORMATIONS) }, school: { type: ['string', 'null'], enum: Object.keys(FM.SCHOOLS).concat([null]) }, mentality: { type: 'integer', minimum: 0, maximum: 4 }, pressing: { type: 'integer', minimum: 0, maximum: 2 }, tempo: { type: 'integer', minimum: 0, maximum: 2 }, width: { type: 'integer', minimum: 0, maximum: 2 }, line: { type: 'integer', minimum: 0, maximum: 2 }, passing: { type: 'integer', minimum: 0, maximum: 2 } }, required: ['formation'] };
+  function aiActivity(text) { UI.ai.activity.push(text); const el = document.getElementById('ai-act'); if (el) el.innerHTML = UI.ai.activity.map((a) => `<div>${esc(a)}</div>`).join(''); }
+  function aiTools() {
+    return [
+      { name: 'get_team', description: 'Our squad: one row per player with position, age, rating (ovr), potential stars, fitness, morale, recent form, goals, value, wage, contract, injury and suspension. "generated" players are fillers without real data.', execute: () => { aiActivity('يقرأ قائمة الفريق'); return FM.squadOf(S, S.userClub).sort((a, b) => b.ovr - a.ovr).map(brief); } },
+      { name: 'get_tactic', description: 'Our current plan: formation, coaching school, instructions, the XI with each player rating at his role, bench, formation familiarity and the analyst warnings.', execute: () => {
+        aiActivity('يراجع خطتنا الحالية');
+        const t = myT(), slots = FM.FORMATIONS[t.formation];
+        return { formation: t.formation, school: t.school, instructions: Object.fromEntries(Object.keys(FM.TACTIC_KEYS).map((k) => [k, t[k]])), familiarity: Math.round(S.fam[S.userClub][t.formation]), lineup: t.lineup.map((id, i) => ({ role: slots[i][0], name: S.players[id] ? S.players[id].name : null, rating_in_role: S.players[id] ? Math.round(FM.ovrAt(S.players[id], slots[i][0])) : null, fitness: S.players[id] ? S.players[id].fit : null })), bench: t.bench.map((id) => S.players[id] && `${S.players[id].name} (${S.players[id].pos} ${S.players[id].ovr})`), warnings: tacticWarnings(t).list.map((w) => w.t) };
+      } },
+      { name: 'get_next_match', description: "Next fixture: date, venue, opponent's expected formation, coaching school and instructions, how their coach scouted us, their key players, line-by-line strength comparison, expected possession and goals, and the tactical factors between the current plans.", execute: () => { aiActivity('يدرس الخصم القادم'); return nextMatchData(); } },
+      { name: 'simulate', description: 'Plays the next match 150 times with a candidate plan for us against the opponent expected plan and returns win/draw/loss percentages, average score and xG. Picks the best XI automatically when the formation changes. Changes nothing.', inputSchema: PLAN_SCHEMA, execute: (input) => {
+        const t = planFrom(input || {});
+        aiActivity(`يجرّب في المحاكي: ${t.formation}${t.school ? ' · ' + FM.SCHOOLS[t.school].coach : ''}`);
+        const f = FM.userFixture(S);
+        if (!f) throw new Error('لا مباراة قادمة');
+        const home = f.h === S.userClub, oppId = home ? f.a : f.h;
+        FM.prepareAI(S, oppId, S.userClub);
+        const r = home ? FM.monteCarlo(S, S.userClub, t, oppId, S.tactics[oppId], 150) : FM.monteCarlo(S, oppId, S.tactics[oppId], S.userClub, t, 150);
+        const w = home ? r.w : r.l, l = home ? r.l : r.w;
+        return { plan: { formation: t.formation, school: t.school }, win_pct: Math.round((w / r.n) * 100), draw_pct: Math.round((r.d / r.n) * 100), loss_pct: Math.round((l / r.n) * 100), avg_goals_us: home ? r.gf : r.ga, avg_goals_them: home ? r.ga : r.gf, xg_us: home ? r.xgf : r.xga, xg_them: home ? r.xga : r.xgf };
+      } },
+      { name: 'apply_plan', description: 'Applies a plan to our team: formation, coaching school and instructions; picks the best XI when the formation changes. The coach can undo it. Only call when the coach asked to apply.', inputSchema: PLAN_SCHEMA, execute: (input) => {
+        const t = planFrom(input || {});
+        UI.ai.undo = JSON.parse(JSON.stringify(myT()));
+        Object.assign(myT(), t);
+        save();
+        aiActivity(`طبّق الخطة: ${t.formation}${t.school ? ' · ' + FM.SCHOOLS[t.school].coach : ''}`);
+        return { applied: true, formation: t.formation, school: t.school };
+      } },
+      { name: 'get_last_match', description: 'Our last match report: score, stats for both sides, analyst notes and the best and worst rated players.', execute: () => {
+        aiActivity('يقرأ تقرير آخر مباراة');
+        const R = S.lastReport;
+        if (!R) return { none: true };
+        const u = R.user >= 0 ? R.user : 0;
+        const side = (sd) => ({ club: FM.club(S, sd.clubId).name, goals: sd.goals, possession: sd.poss, shots: sd.shots, on_target: sd.onT, xg: sd.xg, big_chances: sd.big, pass_pct: sd.passPct, corners: sd.corners, formation: sd.formation, scorers: sd.scorers.map((g) => S.players[g.id] ? `${S.players[g.id].name} ${g.min}'` : '') });
+        return { date: R.date, us: side(R.sides[u]), them: side(R.sides[1 - u]), notes: R.notes.map((n) => n.text), our_ratings: R.sides[u].ratings.map((r) => ({ name: S.players[r.id] ? S.players[r.id].name : '', role: r.role, minutes: r.min, rating: r.r })) };
+      } },
+      { name: 'search_market', description: 'Finds transfer targets we could afford: filter by position, max age, max asking price (euros) and min rating. Returns up to 8 players with club, rating, potential stars, asking price and wage demand.', inputSchema: { type: 'object', properties: { position: { type: 'string', enum: FM.POS }, max_age: { type: 'integer' }, max_price: { type: 'integer' }, min_ovr: { type: 'integer' } } }, execute: (input) => {
+        const i = input || {};
+        aiActivity(`يبحث في السوق${i.position ? ': ' + i.position : ''}`);
+        const maxP = i.max_price ? +i.max_price : me().budget;
+        return Object.values(S.players).filter((p) => p.clubId !== S.userClub && !p.discovered && (!i.position || p.pos === i.position) && (!i.max_age || p.age <= +i.max_age) && (!i.min_ovr || p.ovr >= +i.min_ovr) && FM.askingPrice(S, p) <= maxP)
+          .sort((a, b) => b.ovr - a.ovr || a.age - b.age).slice(0, 8)
+          .map((p) => Object.assign(brief(p), { club: p.clubId ? FM.club(S, p.clubId).name : 'free agent', asking_price: FM.askingPrice(S, p), wage_demand: FM.wageDemand(S, p) }));
+      } },
+      { name: 'get_league', description: 'Our league table (all clubs with points, goal difference and form), our board target and our budget.', execute: () => { aiActivity('يراجع الترتيب'); return { table: FM.table(S).map((r, i) => ({ pos: i + 1, club: FM.club(S, r.id).name, played: r.p, pts: r.pts, gd: r.gf - r.ga, form: r.form.slice(-5).join('') })), target: FM.targetText(S), budget: me().budget }; } },
+    ];
+  }
+  function aiFallbackContext() {
+    return `\n\nبيانات الفريق (JSON):\n${JSON.stringify({ team: FM.squadOf(S, S.userClub).sort((a, b) => b.ovr - a.ovr).slice(0, 24).map(brief), next_match: nextMatchData(), last_match_notes: S.lastReport ? S.lastReport.notes.map((n) => n.text) : [] }).slice(0, 60000)}`;
+  }
+  async function aiSend(text) {
+    const A = UI.ai;
+    if (!A.sample || A.busy || !text.trim()) return;
+    A.turns.push({ role: 'user', content: text.trim() });
+    if (A.turns.length > 16) A.turns = A.turns.slice(-16);
+    A.busy = true; A.live = ''; A.activity = []; A.error = null;
+    A.ctl = new AbortController();
+    render();
+    const input = [{ role: 'user', content: aiRules() + (A.tools ? '' : aiFallbackContext()) }].concat(A.turns);
+    try {
+      const res = await A.sample(input, Object.assign({ signal: A.ctl.signal, cache: false, onText: ({ text: t }) => { A.live = t; const el = document.getElementById('ai-live'); if (el) el.innerHTML = fmtAI(t); } }, A.tools ? { tools: aiTools() } : {}));
+      A.turns.push({ role: 'assistant', content: res.text + (res.truncated ? '\n\n(انقطع الرد: اطلب جزءًا أصغر)' : '') });
+    } catch (e) {
+      const code = e && e.code;
+      if (e && e.text) A.turns.push({ role: 'assistant', content: e.text });
+      if (code === 'not_granted' || code === 'sampling_disabled' || code === 'not_declared' || code === 'capability_disabled' || code === 'capability_removed') { A.error = 'لم يُسمح للعبة باستعمال Claude في هذه الجلسة.'; A.sample = null; }
+      else if (code === 'rate_limited') A.error = 'طلبات كثيرة أو بلغت حد الاستعمال. حاول بعد قليل.';
+      else if (code === 'tools_unavailable') { A.tools = false; A.error = 'الأدوات غير متاحة هنا؛ أعد الإرسال وسيقرأ المساعد البيانات مباشرة.'; }
+      else if (code !== 'cancelled') A.error = 'تعذر الحصول على رد. أعد المحاولة.';
+    }
+    A.busy = false; A.live = ''; A.ctl = null;
+    S.aiTurns = A.turns;
+    save();
+    if (UI.view === 'ai') render(); else toast('وصل رد المساعد الذكي');
+  }
+  // نص المساعد: هروب ثم تنسيق بسيط (عناوين، غامق، نقاط)
+  function fmtAI(t) {
+    return esc(t).split('\n').map((line) => {
+      let l = line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      if (/^#{1,4}\s/.test(l)) return `<h4>${l.replace(/^#{1,4}\s/, '')}</h4>`;
+      if (/^\s*[-•*]\s/.test(l)) return `<div class="li">${l.replace(/^\s*[-•*]\s/, '')}</div>`;
+      return l.trim() ? `<p>${l}</p>` : '';
+    }).join('');
+  }
+  function aiView() {
+    const A = UI.ai;
+    if (!A.turns.length && S.aiTurns) A.turns = S.aiTurns;
+    const head = `<div class="row sp"><div><h2>المساعد الذكي</h2><div class="muted" style="font-size:.86rem">مساعد مدرب يعمل بـClaude: يقرأ بيانات فريقك وخصمك، يجرّب الخطط في المحاكي، ويطبّق ما توافق عليه.</div></div>${A.turns.length && !A.busy ? '<button class="btn sm ghost" data-a="aiClear">محادثة جديدة</button>' : ''}</div>`;
+    if (A.sample === undefined) return head + '<div class="empty">يجري تشغيل المساعد…</div>';
+    if (!A.sample) return head + `<section class="panel stack"><p style="margin:0">المساعد الذكي يعمل حين تُفتح اللعبة داخل Claude (رابط اللعبة على claude.ai)، ويستعمل حسابك في Claude بعد موافقتك.</p><p class="muted" style="margin:0">${A.error ? esc(A.error) + ' ' : ''}في هذه النسخة استعمل «التحليل»: تقرير الخصم، مختبر المحاكاة، توصيات المحلل ومدارس المدربين.</p><button class="btn" data-a="nav" data-v="analysis" style="justify-self:start">افتح التحليل</button></section>`;
+    const bubbles = A.turns.map((t) => `<div class="bub ${t.role}">${t.role === 'user' ? esc(t.content) : fmtAI(t.content)}</div>`).join('');
+    return head + `<div class="grid g-side">
+      <section class="panel stack">
+        <div class="chat" id="ai-chat">${bubbles || '<div class="empty">اختر سؤالًا جاهزًا أو اكتب سؤالك. المساعد يرى فريقك وخصمك وجدول الدوري.</div>'}
+          ${A.busy ? `<div class="bub assistant"><div id="ai-act" class="act">${A.activity.map((a) => `<div>${esc(a)}</div>`).join('')}</div><div id="ai-live">${A.live ? fmtAI(A.live) : '<p class="muted">يفكر…</p>'}</div></div>` : ''}
+        </div>
+        ${A.error ? `<div class="pill bad" style="justify-self:start;white-space:normal">${esc(A.error)}</div>` : ''}
+        ${A.undo ? '<div class="row"><span class="pill acc">طبّق المساعد خطة جديدة</span><button class="btn sm" data-a="aiUndo">تراجع</button><button class="btn sm ghost" data-a="nav" data-v="tactics">اعرض التكتيك</button></div>' : ''}
+        <form class="row" id="ai-form" style="align-items:end"><div class="field" style="flex:1;min-width:0"><label for="ai-in">سؤالك للمساعد</label><input type="text" id="ai-in" placeholder="مثال: هل أعتمد مدرسة مورينيو أمام هذا الخصم؟" ${A.busy ? 'disabled' : ''} autocomplete="off"></div>${A.busy ? '<button type="button" class="btn danger" data-a="aiStop">إيقاف</button>' : '<button class="btn pri" type="submit">أرسل</button>'}</form>
+      </section>
+      <div class="stack">
+        <section class="panel stack"><h3>أسئلة جاهزة</h3>${AI_PROMPTS.map(([k, l]) => `<button class="btn" data-a="aiQuick" data-k="${k}" ${A.busy ? 'disabled' : ''} style="justify-content:flex-start">${l}</button>`).join('')}</section>
+        <section class="panel"><h3>ما يستطيع فعله</h3><ul class="warn-list"><li>يقرأ تشكيلتك وخطتك وتقرير الخصم وآخر مباراة والترتيب</li><li>يجرّب كل خطة 150 مرة في المحاكي قبل أن ينصحك</li><li>يبحث في سوق الانتقالات ضمن ميزانيتك</li><li>يطبّق الخطة إذا طلبت ذلك، ويمكنك التراجع</li></ul>${A.tools ? '' : '<p class="muted" style="font-size:.8rem;margin:10px 0 0">في هذه الجلسة لا تتوفر الأدوات: يقرأ المساعد ملخص البيانات فقط ولا يشغّل المحاكي.</p>'}</section>
+      </div>
+    </div>`;
+  }
 
   // ---------- الإقلاع ----------
   function start(data) {

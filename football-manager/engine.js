@@ -83,6 +83,33 @@
     wing: { name: 'لعب على الأطراف', mentality: 3, pressing: 1, tempo: 1, width: 2, line: 1, passing: 1 },
     park: { name: 'تكتل دفاعي', mentality: 0, pressing: 0, tempo: 0, width: 0, line: 0, passing: 2 },
   };
+  // مدارس المدربين العالميين: خطة + تعليمات + سمة خاصة يحسبها المحرك (انظر schoolFactors)
+  const SCHOOLS = {
+    guardiola: { coach: 'بيب غوارديولا', name: 'اللعب التموضعي', formation: '4-3-3', mentality: 3, pressing: 2, tempo: 1, width: 2, line: 2, passing: 0, fatigue: 1.1,
+      desc: 'استحواذ طويل بتمرير قصير، أجنحة ملتصقة بالخط، تفوق عددي بين الخطوط، وضغط فوري بعد فقدان الكرة.', needs: 'وسط ودفاع يجيدون التمرير (جودة 68 فأكثر) ومدافعون سريعون للخط المتقدم.' },
+    klopp: { coach: 'يورغن كلوب', name: 'الضغط المضاد', formation: '4-3-3', mentality: 3, pressing: 2, tempo: 2, width: 1, line: 2, passing: 1, fatigue: 1.25,
+      desc: 'استعادة الكرة خلال ثوانٍ من فقدانها ثم الهجوم فورًا على دفاع غير منظم: «الضغط المضاد أفضل صانع ألعاب».', needs: 'لياقة عالية (80% فأكثر) وبدنية قوية في الوسط والهجوم.' },
+    mourinho: { coach: 'جوزيه مورينيو', name: 'الكتلة المنخفضة والمرتدات', formation: '4-2-3-1', mentality: 1, pressing: 0, tempo: 2, width: 1, line: 0, passing: 2, fatigue: 0.9,
+      desc: 'إغلاق العمق وترك الكرة للخصم، ثم الضرب بسرعة في المساحات التي يتركها خلفه.', needs: 'قلبا دفاع قويان، ومهاجمون سريعون للمرتدات.' },
+    simeone: { coach: 'دييغو سيميوني', name: 'الكتلة المتماسكة', formation: '4-4-2', mentality: 1, pressing: 1, tempo: 1, width: 0, line: 0, passing: 2, fatigue: 1.05,
+      desc: 'خطان متقاربان من أربعة لاعبين، روح قتالية في كل التحامات، وخطورة كبيرة في الكرات الثابتة.', needs: 'انضباط دفاعي وقوة بدنية وفي الكرات الهوائية.' },
+    conte: { coach: 'أنطونيو كونتي', name: 'ثلاثي دفاعي وأظهرة', formation: '3-5-2', mentality: 2, pressing: 1, tempo: 2, width: 2, line: 1, passing: 1, fatigue: 1.1,
+      desc: 'ثلاثة قلوب دفاع، ظهيران يصعدان كجناحين، وثنائي هجومي يتبادل الأدوار بحركات محفوظة.', needs: 'ظهيران سريعان بلياقة عالية وثلاثة مدافعين جيدين.' },
+    ancelotti: { coach: 'كارلو أنشيلوتي', name: 'التوازن وحرية النجوم', formation: '4-2-3-1', mentality: 2, pressing: 1, tempo: 1, width: 1, line: 1, passing: 1, fatigue: 0.92,
+      desc: 'هيكل بسيط ومرن يترك للموهوبين حرية الحسم، مع إدارة هادئة للمعنويات والجهد.', needs: 'لاعبون موهوبون في الثلث الأخير.' },
+    bielsa: { coach: 'مارسيلو بييلسا', name: 'الرقابة الفردية', formation: '3-4-3', mentality: 4, pressing: 2, tempo: 2, width: 2, line: 2, passing: 1, fatigue: 1.35,
+      desc: 'رقابة رجل لرجل في كل الملعب وهجوم بلا توقف. المباريات تصبح مفتوحة للطرفين.', needs: 'لياقة استثنائية؛ الخطة تزيد الفرص لك وللخصم.' },
+    arteta: { coach: 'ميكيل أرتيتا', name: 'السيطرة والكرات الثابتة', formation: '4-3-3', mentality: 3, pressing: 2, tempo: 1, width: 1, line: 2, passing: 0, fatigue: 1.1,
+      desc: 'تحكم في الإيقاع، ضغط منظم، وركنيات مدروسة بحركات مسبقة تصنع الأهداف.', needs: 'مدافعون أقوياء في الهواء ومنفذ ركنيات دقيق.' },
+    dezerbi: { coach: 'روبرتو دي زيربي', name: 'استدراج الضغط', formation: '4-2-3-1', mentality: 2, pressing: 1, tempo: 0, width: 1, line: 2, passing: 0, fatigue: 1.0,
+      desc: 'يمرر عمدًا قرب مرماه ليجذب ضغط الخصم، ثم يكسره بتمريرة ويهاجم المساحات خلفه.', needs: 'حارس ومدافعون يجيدون التمرير تحت الضغط. أقوى ضد الفرق التي تضغط عاليًا.' },
+    belmadi: { coach: 'جمال بلماضي', name: 'التحولات السريعة', formation: '4-3-3', mentality: 2, pressing: 1, tempo: 2, width: 1, line: 1, passing: 2, fatigue: 1.05,
+      desc: 'أسلوب الجزائر بطلة أفريقيا 2019: كتلة صلبة وروح جماعية، ثم انطلاقات سريعة عبر الأجنحة.', needs: 'أجنحة سريعة ووسط ميدان مقاتل.' },
+  };
+  const STYLE_SCHOOL = { possession: 'guardiola', gegen: 'klopp', counter: 'mourinho', park: 'simeone', wing: 'conte', balanced: 'ancelotti' };
+  const CLUB_SCHOOL = { ars: 'arteta', mci: 'guardiola', liv: 'klopp', bha: 'dezerbi', che: 'dezerbi', mun: 'conte', cry: 'conte', lee: 'bielsa', mca: 'guardiola', crb: 'belmadi', jsk: 'klopp', usma: 'ancelotti' };
+  const schoolInstr = (k) => { const s = SCHOOLS[k]; return { mentality: s.mentality, pressing: s.pressing, tempo: s.tempo, width: s.width, line: s.line, passing: s.passing }; };
+
   const REGIONS = {
     dz: { name: 'الجزائر', cost: 20000, weeks: 2, talent: 0 },
     ma: { name: 'المغرب', cost: 45000, weeks: 3, talent: 1 },
@@ -260,7 +287,7 @@
 
   function defaultTactic(c) {
     const pr = PRESETS[c.style];
-    return { formation: c.formation, preset: c.style, mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing, lineup: [], bench: [] };
+    return { formation: c.formation, preset: c.style, school: CLUB_SCHOOL[c.id] || STYLE_SCHOOL[c.style] || null, mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing, lineup: [], bench: [] };
   }
   const levelFromRep = (lg, rep) => (lg === 'dz' ? 43 + rep * 0.33 : 36 + rep * 0.5);
   function clubLevel(S, clubId) {
@@ -461,7 +488,7 @@
       midMass: mass.mid, defMass: mass.def, attMass: mass.att,
       pace: avg(pace) || 50, defPace: avg(defPace) || 50, passQ: avg(passQ) || 50,
       wide: avg(wide) || 40, fullback: avg(fullback) || 40, phyAtt: avg(phyAtt) || 50, phyDef: avg(phyDef) || 50,
-      backs, avgFit: avg(fits), avgEff: avg(eff), n: entries.length,
+      backs, avgFit: avg(fits), avgEff: avg(eff), n: entries.length, fam: famVal === undefined ? 70 : famVal,
     };
     out.attRaw = line('att'); out.defRaw = line('def');
     return out;
@@ -506,10 +533,56 @@
         if (Math.abs(pq) > 0.012) out.push({ att: i, poss: clamp(pq, -0.04, 0.04), chance: pq < 0 ? 0.95 : 1, key: 'short', text: pq > 0 ? `جودة تمرير ${X} (${Math.round(a.passQ)}) تخدم أسلوب التمرير القصير` : `لاعبو ${X} لا يملكون الجودة الكافية للتمرير القصير (${Math.round(a.passQ)})` });
       }
     }
+    for (const i of [0, 1]) if (T[i].school && SCHOOLS[T[i].school]) out.push(...schoolFactors(P, T, names, i));
     for (const f of out) {
       f.chance = f.chance || 1; f.big = f.big || 0; f.poss = f.poss || 0; f.cross = f.cross || 0;
       f.weight = (f.chance - 1) + f.big * 2 + f.poss * 2.5;
     }
+    return out;
+  }
+
+  // سمة كل مدرسة؛ قوتها تتبع الانسجام مع الخطة
+  function schoolFactors(P, T, names, i) {
+    const j = 1 - i, a = P[i], ta = T[i], tb = T[j], X = names[i], Y = names[j];
+    const sc = ta.school, tag = 'مدرسة ' + SCHOOLS[sc].coach.split(' ').pop();
+    const out = [];
+    const f = (o) => { o.key = 'school'; o.school = sc; o.text = `${tag}: ${o.text}`; out.push(o); };
+    const q = Math.round(a.passQ);
+    if (sc === 'guardiola') {
+      if (a.passQ >= 68) f({ att: i, poss: 0.035, chance: 1.0, text: `جودة تمرير ${X} (${q}) تسمح بالسيطرة وتحريك كتلة ${Y}` });
+      else f({ att: i, poss: 0.02, chance: 0.96, text: `الأسلوب يحتاج تمريرًا أدق؛ جودة تمرير ${X} ${q} فقط` });
+      f({ att: j, chance: 0.98, text: `تموضع ${X} بعد فقدان الكرة يحدّ من مرتدات ${Y}` });
+    } else if (sc === 'klopp') {
+      if (a.avgFit >= 80) f({ att: i, chance: 1.05, big: 0.02, text: `الضغط المضاد يستعيد الكرة قرب مرمى ${Y} ويصنع فرصًا سريعة` });
+      else f({ att: i, chance: 0.97, text: `لياقة ${X} (${Math.round(a.avgFit)}%) لا تكفي لضغط بهذه الشدة` });
+    } else if (sc === 'mourinho') {
+      f({ att: j, chance: 0.84, big: -0.05, text: `كتلة ${X} المنخفضة تغلق العمق أمام ${Y}` });
+      f({ att: i, poss: -0.05, big: tb.mentality >= 2 ? 0.05 : 0.02, text: `${X} يترك الكرة ويضرب بالمرتدات${tb.mentality >= 2 ? ` في المساحات التي يتركها ${Y}` : ''}` });
+    } else if (sc === 'simeone') {
+      f({ att: j, chance: 0.8, text: `خطا ${X} المتقاربان يخنقان ${Y}` });
+      f({ att: i, poss: -0.04, cross: 0.07, text: `${X} يبحث عن الكرات الثابتة والعرضيات` });
+    } else if (sc === 'conte') {
+      const wb = Math.round(a.fullback);
+      f({ att: i, cross: 0.06, chance: 1 + clamp((a.fullback - 68) * 0.01, -0.05, 0.1), text: `أظهرة ${X} (${wb}) تصعد كأجنحة وتصنع العرضيات` });
+    } else if (sc === 'ancelotti') {
+      f({ att: i, chance: 1.07, text: `حرية نجوم ${X} في الثلث الأخير` });
+      f({ att: j, chance: 0.95, text: `توازن ${X} بين الخطوط` });
+    } else if (sc === 'bielsa') {
+      f({ att: i, chance: 1.14, big: 0.03, text: `الرقابة الفردية تفتح المباراة: فرص أكثر لـ${X}` });
+      f({ att: j, chance: 1.1, big: 0.03, text: `ومساحات أكثر لـ${Y} كلما خسر لاعب من ${X} مواجهته` });
+    } else if (sc === 'arteta') {
+      f({ att: i, cross: 0.04, chance: 0.99, text: `ركنيات ${X} المدروسة خطر دائم` });
+      f({ att: j, chance: 0.98, text: `ضغط ${X} المنظم يقلل فرص ${Y}` });
+    } else if (sc === 'dezerbi') {
+      if (tb.pressing === 2) f({ att: i, chance: 1.14, big: 0.06, text: `${X} يستدرج ضغط ${Y} العالي ثم يضرب في المساحات خلفه` });
+      else f({ att: i, poss: 0.03, text: `${Y} لا يضغط عاليًا، فيبني ${X} بصبر من الخلف` });
+    } else if (sc === 'belmadi') {
+      f({ att: i, chance: ta.tempo === 2 ? 1.08 : 1.03, big: 0.02, text: `تحولات ${X} السريعة عبر الأجنحة` });
+      f({ att: j, chance: 0.95, text: `الكتلة الجماعية لـ${X} تصعّب مهمة ${Y}` });
+    }
+    // خطة لم يتعود عليها الفريق تفقد جزءًا من أثرها
+    const k = clamp((a.fam || 70) / 100, 0.4, 1);
+    for (const o of out) { if (o.chance) o.chance = 1 + (o.chance - 1) * k; o.big = (o.big || 0) * k; o.poss = (o.poss || 0) * k; o.cross = (o.cross || 0) * k; }
     return out;
   }
 
@@ -528,10 +601,12 @@
     for (const i of [0, 1]) {
       const j = 1 - i, a = P[i], b = P[j], ta = T[i], tb = T[j];
       const ratio = a.att / b.def;
-      let r = 0.235 * goalF * Math.pow(ratio, 1.2) * (1 + 0.07 * (ta.mentality - 2)) * (1 - 0.05 * (tb.mentality - 2)) * (1 + 0.06 * (ta.tempo - 1));
+      let r = 0.235 * goalF * Math.pow(ratio, 1.2) * (1 + 0.07 * (ta.mentality - 2)) * (1 + 0.06 * (tb.mentality - 2)) * (1 + 0.06 * (ta.tempo - 1));
       let bg = 0.085, cr = 0.15;
       for (const f of factors) if (f.att === i) { r *= f.chance; bg += f.big; cr += f.cross; }
       if (homeIdx === i) r *= homeF;
+      // الاستحواذ لا يساوي الفرص: من يملك الكرة أقل يهاجم بشكل أكثر مباشرة
+      r *= Math.pow(0.5 / share[i], 0.6);
       rate[i] = clamp(r, 0.05, 0.75);
       big[i] = clamp(bg, 0.03, 0.3);
       cross[i] = clamp(cr + (ta.width - 1) * 0.04, 0.05, 0.35);
@@ -560,7 +635,7 @@
       sides: [sideFrom(S, homeId, tH), sideFrom(S, awayId, tA)],
       names: [club(S, homeId).short, club(S, awayId).short],
       events: [], tl: [], xgt: [[0], [0]], zones: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], user: opts.userSide === undefined ? -1 : opts.userSide,
-      ai: opts.ai || [opts.userSide !== 0, opts.userSide !== 1], mom: 0, quiet: !!opts.quiet, sim: clubLeague(S, homeId).sim, cur: null,
+      ai: opts.ai || [opts.userSide !== 0, opts.userSide !== 1], mom: 0, quiet: !!opts.quiet, sim: clubLeague(S, homeId).sim, cur: null, smart: [homeId, awayId].map((id) => id !== S.userClub && club(S, id).rep >= 60),
     };
     refresh(S, m);
     return m;
@@ -668,7 +743,7 @@
     }
     // التعب
     for (const sd of m.sides) {
-      const rateF = 0.2 + 0.06 * sd.tactic.pressing + 0.04 * sd.tactic.tempo;
+      const rateF = (0.2 + 0.06 * sd.tactic.pressing + 0.04 * sd.tactic.tempo) * (SCHOOLS[sd.tactic.school] ? SCHOOLS[sd.tactic.school].fatigue : 1);
       for (const e of sd.on) {
         const p = S.players[e.id];
         const k = e.role === 'GK' ? 0.25 : 1;
@@ -734,7 +809,7 @@
         A.shots++; A.xg += xs;
         const hshot = { side: i, id: hd.id, kind: 'corner', xg: xs, out: rand() < 0.4 ? 'save' : 'miss', gk: gk ? gk.id : null };
         m.cur.shots.push(hshot);
-        if (rand() < xs * (0.6 + S.players[hd.id].a.phy / 160)) {
+        if (rand() < xs * (0.6 + S.players[hd.id].a.phy / 160) * ({ arteta: 1.5, simeone: 1.3 }[A.tactic.school] || 1)) {
           A.goals++; A.onT++; bump(A, hd.id, 1.0);
           hshot.out = 'goal';
           const tk = chooseAssister(S, A, hd.id);
@@ -805,8 +880,35 @@
       if (tired) autoSub(S, m, k, tired);
     }
     const diff = sd.goals - m.sides[1 - k].goals;
+    if (t === 46 && m.smart && m.smart[k]) halftimeRethink(S, m, k, diff);
     if (t === 68 && diff < 0 && sd.tactic.mentality < 4) { sd.tactic.mentality = Math.min(4, sd.tactic.mentality + (diff <= -2 ? 2 : 1)); if (!m.quiet) ev(m, 'tactic', k, `${sideName(m, k)} يتحول إلى الهجوم بحثًا عن التعديل`); }
     if (t === 78 && diff === 1 && sd.tactic.mentality > 1) { sd.tactic.mentality = 1; sd.tactic.line = 0; if (!m.quiet) ev(m, 'tactic', k, `${sideName(m, k)} يتراجع لحماية تقدمه`); }
+  }
+
+  // بين الشوطين: المدرب الذكي يجرّب ثلاث تعديلات على المعاملات الحالية ويختار الأنسب للنتيجة
+  function halftimeRethink(S, m, k, diff) {
+    const sd = m.sides[k];
+    const base = Object.assign({}, sd.tactic);
+    const opts = [
+      { name: null, t: base },
+      { name: 'يندفع للهجوم', t: Object.assign({}, base, { mentality: Math.min(4, base.mentality + 1), tempo: 2 }) },
+      { name: 'يغلق المساحات', t: Object.assign({}, base, { mentality: Math.max(0, base.mentality - 1), line: 0, pressing: Math.max(0, base.pressing - 1) }) },
+      { name: 'يرفع الضغط', t: Object.assign({}, base, { pressing: 2, line: 2 }) },
+    ];
+    let best = opts[0], bv = -Infinity;
+    for (const o of opts) {
+      const T = k === 0 ? [o.t, m.sides[1].tactic] : [m.sides[0].tactic, o.t];
+      const f = tacticalFactors(m.P, T, m.names);
+      const co = coefficients(m.P, T, m.homeIdx, f, m.sim);
+      const xf = co.share[k] * co.rate[k] * co.xgm[k], xa = co.share[1 - k] * co.rate[1 - k] * co.xgm[1 - k];
+      const v = diff < 0 ? xf - 0.5 * xa : diff > 0 ? -xa + 0.3 * xf : xf - xa;
+      if (v > bv + 0.002) { bv = v; best = o; }
+    }
+    if (best.name) {
+      Object.assign(sd.tactic, best.t);
+      if (!m.quiet) ev(m, 'tactic', k, `بين الشوطين: مدرب ${sideName(m, k)} قرأ الشوط الأول و${best.name}`);
+      refresh(S, m);
+    }
   }
 
   function finish(S, m) {
@@ -939,13 +1041,21 @@
     const out = [];
     for (const key in PRESETS) {
       for (const form of [myTactic.formation].concat(Object.keys(FORMATIONS).filter((f) => f !== myTactic.formation))) {
-        const t = Object.assign({}, myTactic, PRESETS[key], { preset: key, formation: form });
+        const t = Object.assign({}, myTactic, PRESETS[key], { preset: key, school: null, formation: form });
         delete t.name;
         if (form !== myTactic.formation) autoPick(S, myId, t);
         const e = home ? expected(S, myId, t, oppId, oppTactic) : expected(S, oppId, oppTactic, myId, t);
         const mine = home ? 0 : 1;
         out.push({ preset: key, formation: form, xgf: e.xg[mine], xga: e.xg[1 - mine], diff: e.xg[mine] - e.xg[1 - mine], fam: (S.fam[myId] || {})[form] || 0 });
       }
+    }
+    for (const key in SCHOOLS) {
+      const sc = SCHOOLS[key];
+      const t = Object.assign({}, myTactic, schoolInstr(key), { school: key, preset: null, formation: sc.formation });
+      if (sc.formation !== myTactic.formation) autoPick(S, myId, t);
+      const e = home ? expected(S, myId, t, oppId, oppTactic) : expected(S, oppId, oppTactic, myId, t);
+      const mine = home ? 0 : 1;
+      out.push({ school: key, preset: null, formation: sc.formation, xgf: e.xg[mine], xga: e.xg[1 - mine], diff: e.xg[mine] - e.xg[1 - mine], fam: (S.fam[myId] || {})[sc.formation] || 0 });
     }
     out.sort((a, b) => b.diff - a.diff);
     return out;
@@ -1020,11 +1130,45 @@
     const c = club(S, clubId);
     const opp = club(S, oppId);
     const pr = PRESETS[c.style];
-    Object.assign(t, { mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing });
+    if (!t.home) t.home = t.school || null;
+    t.school = t.home;
+    Object.assign(t, t.school ? schoolInstr(t.school) : { mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing });
     // الفرق الضعيفة تتراجع أمام الكبار
     if (opp.rep - c.rep > 12) { t.mentality = Math.max(0, t.mentality - 1); t.line = Math.min(t.line, 1); }
     if (c.rep - opp.rep > 12) t.mentality = Math.min(4, t.mentality + 1);
     autoPick(S, clubId, t);
+    if (oppId === S.userClub) scoutUser(S, clubId, t);
+  }
+
+  // مدرب الخصم يدرس آخر خطة لعبتَ بها ويختار من مدارسه ما يواجهها؛ الأندية الكبيرة تملك خيارات أكثر
+  function scoutUser(S, clubId, t) {
+    const f = userFixture(S);
+    if (!f || (f.h !== clubId && f.a !== clubId)) return;
+    const key = `${S.season}-${S.week}-${clubId}`;
+    if (S.oppPlan && S.oppPlan.key === key) {
+      if (S.oppPlan.school !== t.school) { t.school = S.oppPlan.school; Object.assign(t, schoolInstr(t.school)); }
+      return;
+    }
+    const c = club(S, clubId);
+    const ref = Object.assign({}, S.tactics[S.userClub], S.lastUserTactic || {}, { lineup: S.tactics[S.userClub].lineup, bench: [] });
+    const pool = c.rep >= 80 ? Object.keys(SCHOOLS) : c.rep >= 62 ? ['mourinho', 'simeone', 'klopp', 'ancelotti'] : c.rep >= 50 ? ['mourinho', 'simeone'] : [];
+    const home = f.h === clubId;
+    const score = (tt) => { const e = home ? expected(S, clubId, tt, S.userClub, ref) : expected(S, S.userClub, ref, clubId, tt); const k = home ? 0 : 1; return e.xg[k] - e.xg[1 - k]; };
+    const own = score(t);
+    let best = { school: t.school, v: own };
+    for (const sc of pool) {
+      if (sc === t.school) continue;
+      const tt = Object.assign({}, t, schoolInstr(sc), { school: sc });
+      const v = score(tt);
+      if (v > best.v + 0.1) best = { school: sc, v };
+    }
+    let reason = null;
+    if (best.school !== t.school) {
+      t.school = best.school;
+      Object.assign(t, schoolInstr(best.school));
+      reason = `درس مدرب ${c.name} طريقة لعبك الأخيرة (${ref.formation}${ref.school ? '، مدرسة ' + SCHOOLS[ref.school].coach : ''}) وقرر مواجهتك بأسلوب ${SCHOOLS[best.school].coach}: ${SCHOOLS[best.school].name}`;
+    }
+    S.oppPlan = { key, school: t.school, reason };
   }
 
   function afterUserMatch(S, m, f) {
@@ -1036,6 +1180,8 @@
     const r = Math.sign(gf - ga);
     S.board.conf = clamp(Math.round(S.board.conf + r * 3 - expect * 1.5 + (r < 0 && opp.rep > me.rep ? 1.5 : 0)), 0, 100);
     S.formLine.push({ week: S.week, gf, ga, pos: 0 });
+    const ut = m.sides[u].tactic;
+    S.lastUserTactic = { formation: ut.formation, school: ut.school || null, mentality: ut.mentality, pressing: ut.pressing, tempo: ut.tempo, width: ut.width, line: ut.line, passing: ut.passing };
     const ratings = Object.keys(m.sides[u].mins);
     const top14 = squadOf(S, S.userClub).sort((a, b) => b.ovr - a.ovr).slice(0, 14).map((p) => p.id);
     for (const id of top14) if (!ratings.includes(id) && available(S.players[id])) S.players[id].morale = clamp(S.players[id].morale - 4, 10, 100);
@@ -1441,7 +1587,7 @@
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
   const FM = {
-    ATTRS, ATTR_AR, POS, POS_AR, W, FORMATIONS, TACTIC_KEYS, TACTIC_AR, PRESETS, REGIONS, TRAIN_FOCUS, FACILITY, MAX_SUBS, MAX_SQUAD,
+    ATTRS, ATTR_AR, POS, POS_AR, W, FORMATIONS, SCHOOLS, schoolInstr, TACTIC_KEYS, TACTIC_AR, PRESETS, REGIONS, TRAIN_FOCUS, FACILITY, MAX_SUBS, MAX_SQUAD,
     setSeed, rand, clamp, round1, money, toStars, potRange, facilityCost,
     newGame, club, squadOf, available, ovrAt, familiarity, autoPick, validateLineup, profile, previewProfile, tacticalFactors,
     createMatch, stepMinute, simulate, substitute, refresh, applyMatch, report, expected, monteCarlo, recommend,

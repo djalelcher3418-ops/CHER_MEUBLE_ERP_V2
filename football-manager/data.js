@@ -8,7 +8,7 @@
     {
       id: 'pl', name: 'الدوري الإنجليزي الممتاز', short: 'البريميرليغ', country: 'إنجلترا',
       start: '2026-08-21', end: '2027-05-23', relegate: 3, europe: 4,
-      sim: { goal: 0.92, home: 1.13 },
+      sim: { goal: 0.86, home: 1.13 },
       econ: { tv: 1500000, sponsor: 300, ticket: 55, prize: 2400000, champ: 0, opex: 0.4, fac: 4, wageMin: 15000 },
       md1: [['ars', 'cov'], ['hul', 'mun'], ['eve', 'cry'], ['ips', 'sun'], ['nfo', 'lee'], ['bre', 'tot'], ['bha', 'avl'], ['mci', 'bou'], ['new', 'liv'], ['ful', 'che']],
       clubs: [
