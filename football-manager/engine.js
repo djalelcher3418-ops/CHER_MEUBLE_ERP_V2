@@ -114,23 +114,14 @@
       last: ['بيتروفيتش', 'كوفاتش', 'نوفاك', 'يوفانوفيتش', 'بوبوف', 'هورفات', 'ماركوفيتش', 'إيليتش', 'سافيتش', 'ستويانوف'],
     },
   };
-  const NAME_SET = { dz: 'maghreb', ma: 'maghreb', tn: 'maghreb', eg: 'eg', wa: 'wa', sa: 'sa', ee: 'ee' };
-  const CLUBS = [
-    { name: 'صقور الأطلس', short: 'صقور', rep: 88, color: '#c8102e', color2: '#ffffff', capacity: 52000, style: 'gegen', formation: '4-3-3' },
-    { name: 'اتحاد الساحل', short: 'الساحل', rep: 84, color: '#1d4fa3', color2: '#f4d03f', capacity: 45000, style: 'possession', formation: '4-2-3-1' },
-    { name: 'نجم الهضاب', short: 'النجم', rep: 79, color: '#0b7a3e', color2: '#ffffff', capacity: 38000, style: 'balanced', formation: '4-4-2' },
-    { name: 'أولمبي الميناء', short: 'الميناء', rep: 75, color: '#1b9ad6', color2: '#0d2340', capacity: 30000, style: 'wing', formation: '4-3-3' },
-    { name: 'فرسان الصحراء', short: 'الفرسان', rep: 71, color: '#d98a1f', color2: '#3b1f0a', capacity: 26000, style: 'counter', formation: '4-2-3-1' },
-    { name: 'أهلي الوادي', short: 'الوادي', rep: 67, color: '#7a1f2b', color2: '#e8c47a', capacity: 24000, style: 'balanced', formation: '4-1-4-1' },
-    { name: 'شباب الجبل', short: 'الجبل', rep: 63, color: '#5c2d91', color2: '#ffffff', capacity: 18000, style: 'gegen', formation: '4-4-2' },
-    { name: 'رياضي السهول', short: 'السهول', rep: 59, color: '#2e8b57', color2: '#f2e394', capacity: 16000, style: 'wing', formation: '3-5-2' },
-    { name: 'النسور الحمر', short: 'النسور', rep: 55, color: '#e0442c', color2: '#111111', capacity: 15000, style: 'counter', formation: '5-3-2' },
-    { name: 'اتحاد المدينة', short: 'المدينة', rep: 51, color: '#444c56', color2: '#f5f5f5', capacity: 13000, style: 'park', formation: '5-3-2' },
-    { name: 'قلعة الزيتون', short: 'الزيتون', rep: 47, color: '#6b8e23', color2: '#fdfbe7', capacity: 11000, style: 'balanced', formation: '4-4-2' },
-    { name: 'نادي الشروق', short: 'الشروق', rep: 43, color: '#f28c28', color2: '#1c1c1c', capacity: 9000, style: 'park', formation: '4-1-4-1' },
-  ];
-  const SQUAD_TEMPLATE = ['GK', 'GK', 'CB', 'CB', 'CB', 'CB', 'LB', 'LB', 'RB', 'RB', 'DM', 'DM', 'CM', 'CM', 'CM', 'AM', 'AM', 'LW', 'LW', 'RW', 'RW', 'ST', 'ST', 'ST'];
-  const MAX_SQUAD = 30;
+  NAMES.en = {
+    first: ['جاك', 'هاري', 'تشارلي', 'أوليفر', 'جورج', 'ألفي', 'ريس', 'كالوم', 'لويس', 'ماسون', 'توم', 'جوش', 'إيثان', 'رايان', 'دانيال', 'سام', 'ليام', 'ناثان', 'كونور', 'آرتشي'],
+    last: ['سميث', 'جونز', 'ويليامز', 'براون', 'تايلور', 'ديفيز', 'إيفانز', 'توماس', 'جونسون', 'روبرتس', 'ووكر', 'رايت', 'طومسون', 'وايت', 'هيوز', 'إدواردز', 'غرين', 'هول', 'وود', 'هاريس', 'مارتن', 'كوك', 'كلارك', 'بيكر'],
+  };
+  const NAME_SET = { dz: 'maghreb', ma: 'maghreb', tn: 'maghreb', eg: 'eg', wa: 'wa', sa: 'sa', ee: 'ee', en: 'en' };
+  // الحد الأدنى من كل مركز في التشكيلة
+  const NEED = { GK: 3, CB: 4, LB: 2, RB: 2, DM: 2, CM: 3, AM: 2, LW: 2, RW: 2, ST: 3 };
+  const MAX_SQUAD = 32;
   const MAX_SUBS = 5;
   const TRAIN_FOCUS = {
     balanced: { name: 'متوازن', attrs: null },
@@ -145,7 +136,7 @@
     youth: { name: 'أكاديمية الشباب', desc: 'مواهب أكثر وأعلى إمكانات في دفعة نهاية الموسم' },
     scouting: { name: 'شبكة الكشافة', desc: 'كشافون أكثر، تقارير أدق ولاعبون أكثر في كل مهمة' },
   };
-  const facilityCost = (lvl) => [0, 1500000, 3500000, 7000000, 12000000][lvl] || Infinity;
+  const facilityCost = (lvl, S) => ([0, 1500000, 3500000, 7000000, 12000000][lvl] || Infinity) * (S ? userLeague(S).econ.fac : 1);
 
   // ---------- اللاعب ----------
   function familiarity(p, role) {
@@ -164,14 +155,17 @@
   const ovrAt = (p, role) => rawAt(p, role) * familiarity(p, role);
   const calcOvr = (p) => Math.round(rawAt(p, p.pos));
 
+  // القيمة السوقية: تقييم 64 ≈ 0.7 مليون، 80 ≈ 15 مليون، 88 ≈ 70 مليون، 91 ≈ 120 مليون
   function playerValue(p) {
-    const base = 500000 * Math.pow(1.135, p.ovr - 60);
+    const base = 300000 * Math.pow(1.21, p.ovr - 60);
     let af;
     if (p.age <= 21) af = 1.3; else if (p.age <= 27) af = 1.1; else if (p.age <= 30) af = 0.85; else if (p.age <= 33) af = 0.5; else af = 0.25;
     const potBonus = p.age < 24 ? 1 + Math.max(0, p.pot - p.ovr) * 0.035 : 1;
-    return Math.max(10000, Math.round((base * af * potBonus) / 10000) * 10000);
+    const v = base * af * potBonus;
+    return Math.max(5000, v >= 1e6 ? Math.round(v / 100000) * 100000 : Math.round(v / 5000) * 5000);
   }
-  const baseWage = (p) => Math.max(800, Math.round((p.value * 0.0019 + p.ovr * 40) / 100) * 100);
+  // الأجر الأسبوعي: جزء من القيمة + حد أدنى حسب اقتصاد الدوري
+  const baseWage = (p, econ) => Math.max(300, Math.round((p.value * 0.0028 + (econ ? econ.wageMin : 600) * p.ovr / 70) / 100) * 100);
 
   function nameFor(region) {
     const set = NAMES[NAME_SET[region] || 'maghreb'];
@@ -195,7 +189,12 @@
     }
     const reg = REGIONS[region];
     if (reg && reg.boost) for (const k of reg.boost) if (k !== 'gk') a[k] = clamp(a[k] + ri(1, 5), 15, 97);
-    const p = { id: 'p' + S.nextId++, name: nameFor(region), region, age, pos, alt: [], a, clubId: opt.clubId === undefined ? null : opt.clubId };
+    let name = opt.name;
+    if (!name) {
+      const used = new Set(Object.values(S.players).map((q) => q.name));
+      for (let k = 0; k < 6 && (!name || used.has(name)); k++) name = nameFor(region);
+    }
+    const p = { id: 'p' + S.nextId++, name, real: !!opt.real, gen: false, num: 0, region, age, pos, alt: [], a, clubId: opt.clubId === undefined ? null : opt.clubId };
     // نصحح القيم حتى يقترب التقييم من الهدف
     for (let it = 0; it < 3; it++) {
       const diff = target - rawAt(p, pos);
@@ -204,13 +203,13 @@
     }
     if (pos !== 'GK' && rand() < 0.4) p.alt.push(pick(RELATED[pos]));
     p.ovr = calcOvr(p);
-    const growth = Math.max(0, 26 - age) * (0.5 + rand() * 2.4) + (opt.potBoost || 0);
+    const growth = opt.real ? Math.max(0, 24 - age) * (0.3 + rand() * 1.4) : Math.max(0, 26 - age) * (0.5 + rand() * 2.4) + (opt.potBoost || 0);
     p.pot = clamp(Math.round(p.ovr + growth), p.ovr, 96);
     p.morale = ri(60, 80);
     p.fit = ri(88, 100);
     p.form = [];
     p.value = playerValue(p);
-    p.wage = baseWage(p);
+    p.wage = baseWage(p, p.clubId ? clubLeague(S, p.clubId).econ : null);
     p.contract = opt.contract || ri(1, 4);
     p.inj = 0;
     p.susp = 0;
@@ -231,10 +230,20 @@
     return [toStars(Math.max(p.ovr, p.pot - spread)), toStars(p.pot + spread)];
   }
 
-  // ---------- الأندية والحالة ----------
-  function genFixtures(ids) {
+  // ---------- الدوريات والأندية ----------
+  const DAY = 86400000;
+  const isoAdd = (iso, days) => new Date(Date.parse(iso + 'T12:00:00Z') + days * DAY).toISOString().slice(0, 10);
+  const nextYear = (iso) => (+iso.slice(0, 4) + 1) + iso.slice(4);
+  function roundDates(start, end, n) {
+    const span = (Date.parse(end) - Date.parse(start)) / DAY;
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(isoAdd(start, Math.round((i * span) / Math.max(1, n - 1))));
+    return out;
+  }
+  // ذهاب وإياب بطريقة الدائرة؛ إن أُعطيت الجولة الأولى الحقيقية تُبنى بقية الجولات حولها
+  function genFixtures(ids, md1) {
     const n = ids.length;
-    const arr = ids.slice();
+    const arr = md1 ? md1.map((p) => p[0]).concat(md1.map((p) => p[1]).reverse()) : shuffle(ids.slice());
     const rounds = [];
     for (let r = 0; r < n - 1; r++) {
       const ms = [];
@@ -249,53 +258,105 @@
     return rounds.concat(second).map((ms) => ms.map((m) => ({ h: m.h, a: m.a, hg: null, ag: null })));
   }
 
-  function defaultTactic(club) {
-    const pr = PRESETS[club.style];
-    return { formation: club.formation, preset: club.style, mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing, lineup: [], bench: [] };
+  function defaultTactic(c) {
+    const pr = PRESETS[c.style];
+    return { formation: c.formation, preset: c.style, mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing, lineup: [], bench: [] };
+  }
+  const levelFromRep = (lg, rep) => (lg === 'dz' ? 43 + rep * 0.33 : 36 + rep * 0.5);
+  function clubLevel(S, clubId) {
+    return Math.round(avg(squadOf(S, clubId).map((p) => p.ovr).sort((a, b) => b - a).slice(0, 14)));
+  }
+  const NUMS = { GK: [1, 13, 31, 40], CB: [4, 5, 6, 15, 24, 33, 35], LB: [3, 12, 21, 29], RB: [2, 22, 26, 27], DM: [6, 16, 25, 18], CM: [8, 14, 18, 20, 28, 30], AM: [10, 19, 21, 17], LW: [7, 11, 17, 23], RW: [7, 11, 20, 27], ST: [9, 19, 29, 18, 39] };
+  function assignNumber(S, p) {
+    if (!p.clubId) return;
+    const taken = new Set(squadOf(S, p.clubId).filter((q) => q !== p).map((q) => q.num));
+    let n = NUMS[p.pos].find((x) => !taken.has(x));
+    for (let x = 41; !n && x < 99; x++) if (!taken.has(x)) n = x;
+    p.num = n || 99;
+  }
+  // يكمل التشكيلة حتى الحد الأدنى في كل مركز بلاعبين مولَّدين (يُعلَّمون gen)
+  function fillSquad(S, c, lvl) {
+    const sq = squadOf(S, c.id);
+    const backup = sq.filter((p) => !p.gen).length >= 14;
+    const region = c.league === 'dz' ? 'dz' : 'en';
+    for (const pos in NEED) {
+      let have = sq.filter((p) => p.pos === pos).length;
+      while (have < NEED[pos]) {
+        const age = backup ? ri(17, 22) : clamp(Math.round(25 + gauss() * 4), 18, 34);
+        const target = Math.round(backup ? lvl - 9 + gauss() * 3 : lvl - 1 + gauss() * 3);
+        const p = genPlayer(S, { pos, age, target: clamp(target, 40, 86), region, clubId: c.id, potBoost: backup ? 6 : 0 });
+        p.gen = true;
+        assignNumber(S, p);
+        have++;
+      }
+    }
   }
 
-  function newGame(clubIndex, managerName, seed) {
+  function newGame(clubKey, managerName, seed) {
     if (seed !== undefined) setSeed(seed);
+    const D = root.FM_DATA;
     const S = {
-      v: 1, manager: managerName || 'المدرب', season: 1, year: 2026, week: 0, nextId: 1,
-      clubs: [], players: {}, fixtures: [], inbox: [], scouts: [], reports: [], shortlist: [], listed: [], offers: [],
+      v: 2, manager: managerName || 'المدرب', season: 1, year: 2026, week: 0, nextId: 1,
+      leagues: [], clubs: [], players: {}, inbox: [], scouts: [], reports: [], shortlist: [], listed: [], offers: [], news: [],
       tactics: {}, fam: {}, facilities: { training: 1, youth: 1, scouting: 1 },
       training: { focus: 'balanced', intensity: 1 }, devLog: [], finance: { log: [], week: null },
       board: { conf: 60, target: 6 }, lastReport: null, history: [], formLine: [], gameOver: false, msgId: 1,
     };
-    CLUBS.forEach((c, i) => {
-      const club = Object.assign({ id: 'c' + i }, c);
-      club.budget = Math.round((c.rep * c.rep * 4000) / 100000) * 100000;
-      S.clubs.push(club);
-      S.fam[club.id] = {};
-      for (const f in FORMATIONS) S.fam[club.id][f] = f === club.formation ? 85 : 35;
-      const center = 42 + c.rep * 0.36;
-      SQUAD_TEMPLATE.forEach((pos, k) => {
-        const starter = k % 2 === 0 || pos === 'ST';
-        const age = clamp(Math.round(25 + gauss() * 4), 17, 35);
-        const region = rand() < 0.78 ? 'dz' : pick(['ma', 'tn', 'eg', 'wa', 'sa', 'ee']);
-        genPlayer(S, { pos, age, target: Math.round(center + (starter ? 2 : -3) + gauss() * 2.5), region, clubId: club.id });
-      });
-    });
-    for (let i = 0; i < 26; i++) {
-      genPlayer(S, { pos: pick(POS), age: ri(19, 34), target: ri(48, 66), region: pick(['dz', 'dz', 'ma', 'tn', 'eg', 'wa']), clubId: null, contract: 0 });
+    for (const L of D.LEAGUES) {
+      const lg = { id: L.id, name: L.name, short: L.short, country: L.country, relegate: L.relegate, europe: L.europe, sim: L.sim, econ: L.econ, start: L.start, end: L.end, clubs: [], fixtures: [], dates: [], played: 0 };
+      S.leagues.push(lg);
+      for (const c of L.clubs) {
+        const cl = { id: c.k, league: L.id, name: c.name, short: c.short, stadium: c.stadium, capacity: c.cap, color: c.c1, color2: c.c2, rep: c.rep, budget: c.budget, style: c.style, formation: c.form };
+        S.clubs.push(cl);
+        lg.clubs.push(cl.id);
+        S.fam[cl.id] = {};
+        for (const f in FORMATIONS) S.fam[cl.id][f] = f === cl.formation ? 85 : 35;
+        for (const line of (c.sq || '').split('\n')) {
+          const parts = line.trim().split('|');
+          if (parts.length < 4) continue;
+          genPlayer(S, { name: parts[0], pos: parts[1], age: +parts[2], target: +parts[3], region: L.id === 'dz' ? 'dz' : 'en', clubId: cl.id, real: true, know: 55 });
+        }
+        const lvl = squadOf(S, cl.id).length >= 14 ? clubLevel(S, cl.id) : Math.round(levelFromRep(L.id, cl.rep));
+        fillSquad(S, cl, lvl);
+        cl.level = clubLevel(S, cl.id);
+        const sq = squadOf(S, cl.id);
+        sq.forEach((p) => { p.num = 0; });
+        sq.sort((a, b) => (a.gen - b.gen) || b.ovr - a.ovr).forEach((p) => assignNumber(S, p));
+      }
+      lg.fixtures = genFixtures(lg.clubs, L.md1);
+      lg.dates = roundDates(L.start, L.end, lg.fixtures.length);
     }
-    const user = S.clubs[clubIndex];
+    for (let i = 0; i < 30; i++) {
+      const dz = i % 2 === 0;
+      const p = genPlayer(S, { pos: pick(POS), age: ri(21, 33), target: dz ? ri(54, 64) : ri(64, 75), region: dz ? pick(['dz', 'dz', 'ma', 'tn', 'eg', 'wa']) : pick(['en', 'en', 'sa', 'ee', 'wa']), clubId: null, contract: 0 });
+      p.gen = true;
+    }
+    const user = club(S, clubKey) || S.clubs[0];
     S.userClub = user.id;
-    user.budget = Math.max(user.budget, 4000000);
     S.board.target = targetPosition(S, user.id);
-    S.fixtures = genFixtures(S.clubs.map((c) => c.id));
     S.clubs.forEach((c) => { S.tactics[c.id] = defaultTactic(c); autoPick(S, c.id, S.tactics[c.id]); });
-    squadOf(S, user.id).forEach((p) => { p.know = 75; });
-    sendMsg(S, 'رسالة من مجلس الإدارة', `مرحبًا ${S.manager}. يتوقع المجلس أن ينهي ${user.name} الموسم في المركز ${S.board.target} أو أفضل. ميزانية الانتقالات: ${money(user.budget)}. أمامك ${S.fixtures.length} جولة.`, 'board');
-    sendMsg(S, 'من المحلل', 'افتح «التحليل» قبل كل مباراة: ستجد تقرير الخصم ومختبرًا يحاكي المباراة مئات المرات لتجربة خططك قبل اللعب.', 'tip');
+    squadOf(S, user.id).forEach((p) => { p.know = 80; });
+    const lg = userLeague(S);
+    sendMsg(S, 'رسالة من مجلس الإدارة', `مرحبًا ${S.manager}. يتوقع المجلس أن ينهي ${user.name} موسم ${D.season} في ${targetText(S)}. ميزانية الانتقالات: ${money(user.budget)}. أمامك ${lg.fixtures.length} جولة في ${lg.name}، أولاها يوم ${lg.dates[0]}.`, 'board');
+    sendMsg(S, 'من المحلل', 'افتح «التحليل» قبل كل مباراة: تقرير الخصم ومختبر يحاكي المباراة مئات المرات لتجربة خطتك قبل اللعب.', 'tip');
     return S;
   }
 
+  const leagueOf = (S, id) => S.leagues.find((l) => l.id === id);
+  function userLeague(S) { return leagueOf(S, club(S, S.userClub).league); }
+  const clubLeague = (S, clubId) => leagueOf(S, club(S, clubId).league);
   function targetPosition(S, clubId) {
-    const sorted = S.clubs.slice().sort((a, b) => b.rep - a.rep);
-    const rank = sorted.findIndex((c) => c.id === clubId) + 1;
-    return clamp(rank + 1, 1, S.clubs.length);
+    const lg = clubLeague(S, clubId);
+    const sorted = lg.clubs.map((id) => club(S, id)).sort((a, b) => b.rep - a.rep);
+    const rank = sorted.findIndex((x) => x.id === clubId) + 1;
+    return Math.min(lg.clubs.length - lg.relegate, rank === 1 ? 1 : rank + 1);
+  }
+  function targetText(S) {
+    const lg = userLeague(S);
+    const t = S.board.target;
+    if (t === 1) return 'المركز الأول (التتويج باللقب)';
+    if (t >= lg.clubs.length - lg.relegate) return 'خارج مراكز الهبوط';
+    return `المركز ${t} أو أفضل`;
   }
 
   const club = (S, id) => S.clubs.find((c) => c.id === id);
@@ -453,7 +514,8 @@
   }
 
   // المعاملات الأساسية للمباراة (تُعاد كل دقيقة لأن اللياقة والتبديلات تتغير)
-  function coefficients(P, T, homeIdx, factors) {
+  function coefficients(P, T, homeIdx, factors, sim) {
+    const goalF = sim ? sim.goal : 1, homeF = sim ? sim.home : 1.04;
     const share = [0, 0], rate = [0, 0], big = [0, 0], xgm = [0, 0], cross = [0, 0];
     const x0 = P[0].mid * Math.pow(P[0].midMass / 3.4, 0.35);
     const x1 = P[1].mid * Math.pow(P[1].midMass / 3.4, 0.35);
@@ -466,10 +528,10 @@
     for (const i of [0, 1]) {
       const j = 1 - i, a = P[i], b = P[j], ta = T[i], tb = T[j];
       const ratio = a.att / b.def;
-      let r = 0.21 * Math.pow(ratio, 1.2) * (1 + 0.07 * (ta.mentality - 2)) * (1 - 0.05 * (tb.mentality - 2)) * (1 + 0.06 * (ta.tempo - 1));
+      let r = 0.235 * goalF * Math.pow(ratio, 1.2) * (1 + 0.07 * (ta.mentality - 2)) * (1 - 0.05 * (tb.mentality - 2)) * (1 + 0.06 * (ta.tempo - 1));
       let bg = 0.085, cr = 0.15;
       for (const f of factors) if (f.att === i) { r *= f.chance; bg += f.big; cr += f.cross; }
-      if (homeIdx === i) r *= 1.04;
+      if (homeIdx === i) r *= homeF;
       rate[i] = clamp(r, 0.05, 0.75);
       big[i] = clamp(bg, 0.03, 0.3);
       cross[i] = clamp(cr + (ta.width - 1) * 0.04, 0.05, 0.35);
@@ -498,7 +560,7 @@
       sides: [sideFrom(S, homeId, tH), sideFrom(S, awayId, tA)],
       names: [club(S, homeId).short, club(S, awayId).short],
       events: [], tl: [], xgt: [[0], [0]], zones: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], user: opts.userSide === undefined ? -1 : opts.userSide,
-      ai: opts.ai || [opts.userSide !== 0, opts.userSide !== 1], mom: 0, quiet: !!opts.quiet,
+      ai: opts.ai || [opts.userSide !== 0, opts.userSide !== 1], mom: 0, quiet: !!opts.quiet, sim: clubLeague(S, homeId).sim, cur: null,
     };
     refresh(S, m);
     return m;
@@ -509,7 +571,7 @@
     const T = m.sides.map((sd) => sd.tactic);
     m.P = P;
     m.factors = tacticalFactors(P, T, m.names);
-    m.co = coefficients(P, T, m.homeIdx, m.factors);
+    m.co = coefficients(P, T, m.homeIdx, m.factors, m.sim);
   }
 
   function ev(m, type, side, text, extra) {
@@ -521,11 +583,11 @@
   const sideName = (m, i) => m.names[i];
 
   function chooseShooter(S, sd, kind) {
-    const wr = kind === 'header' ? { ST: 3, CB: 1.3, AM: 0.8, LW: 0.7, RW: 0.7, CM: 0.8, DM: 0.6, LB: 0.4, RB: 0.4, GK: 0 } : { ST: 5, LW: 3, RW: 3, AM: 3, CM: 1.5, DM: 0.6, LB: 0.5, RB: 0.5, CB: 0.35, GK: 0 };
+    const wr = kind === 'header' ? { ST: 3, CB: 1.3, AM: 0.8, LW: 0.7, RW: 0.7, CM: 0.8, DM: 0.6, LB: 0.4, RB: 0.4, GK: 0 } : { ST: 4, LW: 3, RW: 3, AM: 3, CM: 1.6, DM: 0.6, LB: 0.5, RB: 0.5, CB: 0.4, GK: 0 };
     return weighted(sd.on, (e) => {
       const p = S.players[e.id];
       const sk = kind === 'header' ? (p.a.phy + p.a.sho) / 2 : p.a.sho;
-      return wr[e.role] * Math.pow(sk / 60, 2);
+      return wr[e.role] * Math.pow(sk / 60, 1.5);
     });
   }
   function chooseAssister(S, sd, exceptId) {
@@ -541,6 +603,7 @@
     if (m.finished) return;
     m.minute++;
     const t = m.minute;
+    m.cur = { shots: [], foul: null, corner: false };
     const co = m.co;
     const i = rand() < co.share[0] ? 0 : 1;
     const j = 1 - i;
@@ -576,8 +639,9 @@
       takeShot(S, m, i, shooter, xg, kind, assister);
     }
     // الأخطاء والبطاقات
-    if (rand() < 0.11 * (1 + 0.25 * (B.tactic.pressing - 1))) {
+    if (rand() < 0.23 * (1 + 0.2 * (B.tactic.pressing - 1))) {
       B.fouls++;
+      m.cur.foul = { side: j };
       if (rand() < 0.15) {
         const e = pick(B.on);
         B.cards[e.id] = (B.cards[e.id] || 0) + 1;
@@ -585,7 +649,7 @@
         if (B.cards[e.id] >= 2) { B.yel++; sendOff(S, m, j, e.id, 'إنذار ثانٍ'); }
         else { B.yel++; if (!m.quiet) ev(m, 'yellow', j, `بطاقة صفراء لـ${pname(S, e.id)} (${sideName(m, j)})`, { pid: e.id }); }
       } else if (rand() < 0.004) sendOff(S, m, j, pick(B.on).id, 'تدخل عنيف');
-      else if (rand() < 0.18 && !shot) {
+      else if (rand() < 0.09 && !shot) {
         // ركلة حرة خطيرة
         if (rand() < 0.3) { const tk = A.on.slice().sort((a, b) => (S.players[b.id].a.sho + S.players[b.id].a.vis) - (S.players[a.id].a.sho + S.players[a.id].a.vis))[0]; if (tk) { shot = true; bx = 78; takeShot(S, m, i, tk, 0.06 * co.xgm[i], 'fk', null); } }
       }
@@ -615,7 +679,7 @@
     const hx = i === 0 ? bx : 100 - bx;
     const lnY = i === 0 ? lane : 2 - lane;
     m.zones[Math.min(2, Math.floor(hx / 33.4))][lnY]++;
-    m.tl.push({ t, s: i, x: hx, y: lnY * 33 + 8 + rand() * 18, shot });
+    m.tl.push({ t, s: i, x: hx, y: lnY * 33 + 8 + rand() * 18, shot, ev: m.quiet ? null : m.cur });
     m.mom = m.mom * 0.85 + (i === 0 ? 1 : -1) * (shot ? 3 : 0.6);
     m.xgt[0].push(m.sides[0].xg); m.xgt[1].push(m.sides[1].xg);
     // الذكاء الاصطناعي للمدرب
@@ -644,10 +708,12 @@
       if (gk) bump(B, gk.id, -0.25);
       for (const d of B.on) if (d.role === 'CB' || d.role === 'LB' || d.role === 'RB') bump(B, d.id, -0.12);
       m.mom += i === 0 ? 6 : -6;
+      m.cur.shots.push({ side: i, id: e.id, kind, xg, out: 'goal', as: assister ? assister.id : null });
       ev(m, 'goal', i, `هدف! ${nm} ${kindTxt} ويسجل لـ${X}${assister ? ` بتمريرة من ${pname(S, assister.id)}` : ''}`, { pid: e.id, as: assister ? assister.id : null, xg });
       return true;
     }
-    const onTarget = rand() < (kind === 'long' ? 0.3 : 0.42);
+    const onTarget = rand() < (kind === 'long' ? 0.22 : 0.33);
+    m.cur.shots.push({ side: i, id: e.id, kind, xg, out: onTarget ? 'save' : 'miss', as: assister ? assister.id : null, gk: gk ? gk.id : null });
     bump(A, e.id, onTarget ? 0.05 : -0.04);
     if (assister) bump(A, assister.id, 0.08);
     if (onTarget) {
@@ -659,14 +725,18 @@
       if (blocker && rand() < 0.4) bump(B, blocker.id, 0.08);
       if (!m.quiet && (xg > 0.2 || rand() < 0.2)) ev(m, 'miss', i, `${nm} ${kindTxt}… ${xg > 0.25 ? 'ويهدر فرصة محققة!' : 'والكرة خارج المرمى'}`, { pid: e.id, xg });
     }
-    if (rand() < 0.3) {
+    if (rand() < 0.45) {
       A.corners++;
+      m.cur.corner = true;
       if (rand() < 0.22) {
         const hd = chooseShooter(S, A, 'header');
         const xs = clamp(0.07 * m.co.xgm[i], 0.02, 0.2);
         A.shots++; A.xg += xs;
+        const hshot = { side: i, id: hd.id, kind: 'corner', xg: xs, out: rand() < 0.4 ? 'save' : 'miss', gk: gk ? gk.id : null };
+        m.cur.shots.push(hshot);
         if (rand() < xs * (0.6 + S.players[hd.id].a.phy / 160)) {
           A.goals++; A.onT++; bump(A, hd.id, 1.0);
+          hshot.out = 'goal';
           const tk = chooseAssister(S, A, hd.id);
           if (tk) bump(A, tk.id, 0.5);
           A.scorers.push({ id: hd.id, min: m.minute, as: tk ? tk.id : null });
@@ -836,7 +906,7 @@
     const P = [previewProfile(S, homeId, tH), previewProfile(S, awayId, tA)];
     const T = [tH, tA];
     const f = tacticalFactors(P, T, [club(S, homeId).short, club(S, awayId).short]);
-    const co = coefficients(P, T, 0, f);
+    const co = coefficients(P, T, 0, f, clubLeague(S, homeId).sim);
     const xg = [0, 1].map((i) => {
       const avgXg = (co.big[i] * 0.4 + co.cross[i] * 0.075 + 0.2 * 0.037 + (1 - co.big[i] - co.cross[i] - 0.2) * 0.09) * co.xgm[i];
       return 90 * co.share[i] * co.rate[i] * avgXg * 1.12 + 0.1;
@@ -881,11 +951,12 @@
     return out;
   }
 
-  // ---------- الجدول ----------
-  function table(S) {
+  // ---------- الجدول والرزنامة ----------
+  function table(S, leagueId) {
+    const lg = leagueId ? leagueOf(S, leagueId) : userLeague(S);
     const rows = {};
-    for (const c of S.clubs) rows[c.id] = { id: c.id, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, form: [] };
-    for (const round of S.fixtures) for (const f of round) {
+    for (const id of lg.clubs) rows[id] = { id, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, form: [] };
+    for (const round of lg.fixtures) for (const f of round) {
       if (f.hg === null) continue;
       const h = rows[f.h], a = rows[f.a];
       h.p++; a.p++; h.gf += f.hg; h.ga += f.ag; a.gf += f.ag; a.ga += f.hg;
@@ -895,40 +966,53 @@
     }
     return Object.values(rows).sort((x, y) => y.pts - x.pts || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf);
   }
-  const position = (S, clubId) => table(S).findIndex((r) => r.id === clubId) + 1;
+  const position = (S, clubId) => table(S, club(S, clubId).league).findIndex((r) => r.id === clubId) + 1;
 
   function userFixture(S, week) {
-    const w = week === undefined ? S.week : week;
-    const round = S.fixtures[w];
+    const round = userLeague(S).fixtures[week === undefined ? S.week : week];
     if (!round) return null;
     return round.find((f) => f.h === S.userClub || f.a === S.userClub) || null;
   }
+  const fixtureDate = (S, week) => userLeague(S).dates[week === undefined ? S.week : week];
 
-  // ---------- الجولة الأسبوعية ----------
-  // userMatch: مباراة المستخدم بعد انتهائها (مباشرة أو فورية)
-  function playRound(S, userMatch) {
-    const round = S.fixtures[S.week];
-    const uf = userFixture(S);
-    const summary = [];
+  // ---------- الجولة ----------
+  function playLeagueRound(S, lg, userMatch) {
+    const round = lg.fixtures[lg.played];
+    if (!round) return;
+    const uf = round.find((f) => f.h === S.userClub || f.a === S.userClub) || null;
     for (const f of round) {
       let m;
       if (f === uf && userMatch) m = userMatch;
       else {
-        for (const id of [f.h, f.a]) if (id !== S.userClub || !userMatch) prepareAI(S, id, f.h === id ? f.a : f.h);
+        for (const id of [f.h, f.a]) {
+          if (id === S.userClub) validateLineup(S, id, S.tactics[id]);
+          else prepareAI(S, id, id === f.h ? f.a : f.h);
+        }
         m = createMatch(S, f.h, f.a, S.tactics[f.h], S.tactics[f.a], { quiet: f !== uf, userSide: f === uf ? (f.h === S.userClub ? 0 : 1) : -1, ai: [true, true] });
         simulate(S, m);
       }
       applyMatch(S, m, f);
       if (f === uf) {
         S.lastReport = report(S, m);
+        S.lastReport.date = lg.dates[lg.played];
         afterUserMatch(S, m, f);
       }
-      summary.push(f);
     }
+    lg.played++;
+  }
+
+  // userMatch: مباراة المستخدم بعد انتهائها. قبلها تُلعب جولات الدوري الآخر التي حل موعدها
+  function playRound(S, userMatch) {
+    const ul = userLeague(S);
+    const date = ul.dates[S.week];
+    for (const lg of S.leagues) if (lg !== ul) while (lg.played < lg.fixtures.length && lg.dates[lg.played] <= date) playLeagueRound(S, lg, null);
+    playLeagueRound(S, ul, userMatch);
     weekly(S);
-    S.week++;
-    if (S.week >= S.fixtures.length) endSeason(S);
-    return summary;
+    S.week = ul.played;
+    if (S.week >= ul.fixtures.length) {
+      for (const lg of S.leagues) while (lg.played < lg.fixtures.length) playLeagueRound(S, lg, null);
+      endSeason(S);
+    }
   }
 
   function prepareAI(S, clubId, oppId) {
@@ -938,8 +1022,8 @@
     const pr = PRESETS[c.style];
     Object.assign(t, { mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing });
     // الفرق الضعيفة تتراجع أمام الكبار
-    if (opp.rep - c.rep > 18) { t.mentality = Math.max(0, t.mentality - 1); t.line = Math.min(t.line, 1); }
-    if (c.rep - opp.rep > 18) t.mentality = Math.min(4, t.mentality + 1);
+    if (opp.rep - c.rep > 12) { t.mentality = Math.max(0, t.mentality - 1); t.line = Math.min(t.line, 1); }
+    if (c.rep - opp.rep > 12) t.mentality = Math.min(4, t.mentality + 1);
     autoPick(S, clubId, t);
   }
 
@@ -953,29 +1037,26 @@
     S.board.conf = clamp(Math.round(S.board.conf + r * 3 - expect * 1.5 + (r < 0 && opp.rep > me.rep ? 1.5 : 0)), 0, 100);
     S.formLine.push({ week: S.week, gf, ga, pos: 0 });
     const ratings = Object.keys(m.sides[u].mins);
-    const squad = squadOf(S, S.userClub);
-    // اللاعبون الجيدون الذين لا يلعبون يفقدون المعنويات
-    const top14 = squad.slice().sort((a, b) => b.ovr - a.ovr).slice(0, 14).map((p) => p.id);
+    const top14 = squadOf(S, S.userClub).sort((a, b) => b.ovr - a.ovr).slice(0, 14).map((p) => p.id);
     for (const id of top14) if (!ratings.includes(id) && available(S.players[id])) S.players[id].morale = clamp(S.players[id].morale - 4, 10, 100);
   }
 
   function weekly(S) {
     const user = S.userClub;
-    const fin = { wages: 0, tickets: 0, sponsor: 0, transfersIn: 0, transfersOut: 0, scouting: 0, facilities: 0 };
+    const ul = userLeague(S);
+    const fin = { wages: 0, tickets: 0, sponsor: 0, tv: 0, opex: 0 };
+    const wageBy = {};
     S.devLog = [];
     const uf = userFixture(S);
     for (const p of Object.values(S.players)) {
       const isUser = p.clubId === user;
       const c = p.clubId ? club(S, p.clubId) : null;
-      // الإصابات والإيقاف
       if (p.inj > 0) { p.inj--; p.fit = Math.min(p.fit, 70); }
       // من أُوقف في مباراة هذه الجولة يغيب الجولة القادمة، ومن غاب يقضي عقوبته
       if (p.susp > 0 && p.played !== 2) p.susp--;
-      // استعادة اللياقة
       const inten = isUser ? S.training.intensity : 1;
       p.fit = clamp(p.fit + [30, 24, 17][inten], 0, 100);
       if (!p.clubId) { p.fit = 90; p.played = 0; continue; }
-      // التطوير
       const fac = isUser ? S.facilities.training : clamp(Math.round(c.rep / 25), 1, 4);
       const before = p.ovr;
       develop(S, p, fac, isUser ? S.training : { focus: 'balanced', intensity: 1 });
@@ -984,29 +1065,30 @@
       p.value = playerValue(p);
       if (p.played) p.played--;
       p.morale = clamp(p.morale + (70 - p.morale) * 0.05, 10, 100);
-      if (isUser) fin.wages += p.wage;
+      wageBy[p.clubId] = (wageBy[p.clubId] || 0) + p.wage;
     }
-    // الانسجام التكتيكي يتحسن بالتدريب
+    fin.wages = wageBy[user] || 0;
     if (S.training.focus === 'tactical') { const t = S.tactics[user]; S.fam[user][t.formation] = clamp(S.fam[user][t.formation] + 6, 0, 100); }
     for (const c of S.clubs) for (const f in S.fam[c.id]) if (f !== S.tactics[c.id].formation) S.fam[c.id][f] = Math.max(20, S.fam[c.id][f] - 0.5);
-    // المالية
+    // المالية: حقوق البث، الرعاية، التذاكر، الأجور والمصاريف التشغيلية
     const me = club(S, user);
-    fin.sponsor = me.rep * 1500;
+    const E = ul.econ;
+    fin.tv = E.tv;
+    fin.sponsor = Math.round(me.rep * me.rep * E.sponsor);
     if (uf && uf.h === user) {
-      const posF = 1 - (position(S, user) - 1) / S.clubs.length * 0.3;
       const opp = club(S, uf.a);
-      const fill = clamp(0.45 + me.rep / 250 + opp.rep / 400 + (S.board.conf - 50) / 400, 0.3, 1) * posF;
-      fin.tickets = Math.round(me.capacity * Math.min(1, fill) * 18);
+      const fill = clamp(0.5 + me.rep / 250 + opp.rep / 500 + (S.board.conf - 50) / 400, 0.3, 1);
+      fin.tickets = Math.round(me.capacity * fill * E.ticket);
     }
-    me.budget += fin.sponsor + fin.tickets - fin.wages;
-    for (const c of S.clubs) if (c.id !== user) c.budget += c.rep * 1200 - 50000 + (rand() < 0.5 ? c.capacity * 9 : 0);
-    // الكشافة
-    for (const sc of S.scouts) {
-      sc.left--;
-      if (sc.left <= 0) completeScout(S, sc);
+    fin.opex = Math.round((fin.tv + fin.sponsor + fin.tickets) * E.opex);
+    me.budget += fin.tv + fin.sponsor + fin.tickets - fin.opex - fin.wages;
+    for (const c of S.clubs) {
+      if (c.id === user) continue;
+      const e = clubLeague(S, c.id).econ;
+      c.budget += Math.round((e.tv + c.rep * c.rep * e.sponsor + c.capacity * 0.75 * e.ticket * 0.5) * (1 - e.opex) - (wageBy[c.id] || 0));
     }
+    for (const sc of S.scouts) { sc.left--; if (sc.left <= 0) completeScout(S, sc); }
     S.scouts = S.scouts.filter((sc) => sc.left > 0);
-    // عروض الشراء للاعبين المعروضين
     S.offers = S.offers.filter((o) => S.week - o.week < 2 && S.players[o.pid] && S.players[o.pid].clubId === user);
     for (const pid of S.listed) {
       const p = S.players[pid];
@@ -1014,22 +1096,19 @@
       if (rand() < 0.45) makeAIOffer(S, p, 0.8 + rand() * 0.35);
     }
     S.listed = S.listed.filter((pid) => S.players[pid] && S.players[pid].clubId === user);
-    // عروض مفاجئة للنجوم الشباب
     if (rand() < 0.08) {
-      const stars = squadOf(S, user).filter((p) => p.age <= 23 && p.pot >= 75 && !S.listed.includes(p.id));
+      const stars = squadOf(S, user).filter((p) => p.age <= 23 && p.pot >= me.level + 6 && !S.listed.includes(p.id));
       if (stars.length) makeAIOffer(S, pick(stars), 1.2 + rand() * 0.4);
     }
-    // سوق الأندية الأخرى
-    if (rand() < 0.35) aiTransfer(S);
-    // تحذيرات
-    if (S.week === S.fixtures.length - 5) {
+    if (rand() < 0.4) aiTransfer(S);
+    if (S.week === ul.fixtures.length - 6) {
       const ending = squadOf(S, user).filter((p) => p.contract <= 1);
       if (ending.length) sendMsg(S, 'عقود تنتهي', `عقود هؤلاء تنتهي هذا الموسم: ${ending.map((p) => p.name).join('، ')}. جددها من بطاقة اللاعب أو سيرحلون مجانًا.`, 'contract');
     }
     if (S.board.conf < 25 && S.week % 4 === 0) sendMsg(S, 'تحذير من المجلس', `ثقة المجلس منخفضة (${S.board.conf}%). نحتاج نتائج أفضل وإلا ستكون مهمتك في خطر.`, 'board');
     if (me.budget < 0) sendMsg(S, 'رصيد سلبي', `رصيد النادي ${money(me.budget)}. بِع لاعبين أو خفّض الأجور.`, 'finance');
     S.finance.week = fin;
-    S.finance.log.push({ s: S.season, w: S.week, bal: me.budget, inc: fin.sponsor + fin.tickets, out: fin.wages });
+    S.finance.log.push({ s: S.season, w: S.week, bal: me.budget });
     if (S.finance.log.length > 120) S.finance.log.shift();
     const pos = position(S, user);
     if (S.formLine.length && S.formLine[S.formLine.length - 1].week === S.week) S.formLine[S.formLine.length - 1].pos = pos;
@@ -1084,11 +1163,10 @@
   }
   function wageDemand(S, p, clubId) {
     const c = club(S, clubId || S.userClub);
-    const level = 40 + c.rep * 0.42;
-    const f = 1 + Math.max(0, p.ovr - level) * 0.04 + (p.clubId ? 0.12 : 0.05);
-    return Math.round((baseWage(p) * f) / 100) * 100;
+    const f = 1 + Math.max(0, p.ovr - c.level) * 0.04 + (p.clubId ? 0.12 : 0.05);
+    return Math.round((baseWage(p, clubLeague(S, c.id).econ) * f) / 100) * 100;
   }
-  const maxAttract = (S) => 54 + club(S, S.userClub).rep * 0.36;
+  const maxAttract = (S) => club(S, S.userClub).level + 8;
 
   function makeOffer(S, pid, fee, wage, years) {
     const p = S.players[pid];
@@ -1120,6 +1198,7 @@
     p.morale = 78;
     p.discovered = false;
     p.know = Math.max(p.know, 70);
+    assignNumber(S, p);
     S.shortlist = S.shortlist.filter((x) => x !== pid);
     S.reports.forEach((r) => { r.players = r.players.filter((x) => x !== pid); });
     const t = S.tactics[S.userClub];
@@ -1136,7 +1215,7 @@
   }
 
   function makeAIOffer(S, p, mult) {
-    const buyers = S.clubs.filter((c) => c.id !== S.userClub && c.budget > p.value * mult && 40 + c.rep * 0.45 >= p.ovr - 6);
+    const buyers = S.clubs.filter((c) => c.id !== S.userClub && c.budget > p.value * mult && c.level + 5 >= p.ovr);
     if (!buyers.length) return;
     const b = pick(buyers);
     if (S.offers.find((o) => o.pid === p.id && o.club === b.id)) return;
@@ -1155,6 +1234,7 @@
     club(S, S.userClub).budget += o.fee;
     removeFromTactic(S, S.userClub, p.id);
     p.clubId = b.id;
+    assignNumber(S, p);
     p.wage = Math.max(p.wage, wageDemand(S, p, b.id));
     p.contract = ri(2, 4);
     S.listed = S.listed.filter((x) => x !== p.id);
@@ -1200,7 +1280,7 @@
     const pos = pick(POS);
     const weakest = sq.filter((p) => p.pos === pos).sort((x, y) => x.ovr - y.ovr)[0];
     const bar = weakest ? weakest.ovr + 3 : 50;
-    const cands = Object.values(S.players).filter((p) => p.pos === pos && p.clubId !== b.id && p.clubId !== S.userClub && !p.discovered && p.ovr >= bar && p.ovr <= 42 + b.rep * 0.45 && (p.clubId ? askingPrice(S, p) : 0) <= b.budget * 0.6);
+    const cands = Object.values(S.players).filter((p) => p.pos === pos && p.clubId !== b.id && p.clubId !== S.userClub && !p.discovered && p.ovr >= bar && p.ovr <= b.level + 4 && (p.clubId ? askingPrice(S, p) : 0) <= b.budget * 0.6);
     if (!cands.length) return;
     const p = pick(cands);
     const fee = p.clubId ? Math.round(p.value * 1.1 / 10000) * 10000 : 0;
@@ -1208,6 +1288,7 @@
     const from = p.clubId ? club(S, p.clubId).name : 'لاعب حر';
     b.budget -= fee;
     p.clubId = b.id;
+    assignNumber(S, p);
     p.contract = ri(2, 4);
     if (sq.length >= 28 && weakest) { removeFromTactic(S, b.id, weakest.id); weakest.clubId = null; weakest.contract = 0; }
     S.news = S.news || [];
@@ -1230,7 +1311,7 @@
     const r = REGIONS[sc.region];
     const lvl = S.facilities.scouting;
     const me = club(S, S.userClub);
-    const level = 40 + me.rep * 0.4;
+    const level = me.level;
     const n = 2 + lvl;
     const found = [];
     for (let k = 0; k < n; k++) {
@@ -1263,7 +1344,7 @@
   function upgradeFacility(S, key) {
     const lvl = S.facilities[key];
     if (lvl >= 5) return 'المستوى الأعلى';
-    const cost = facilityCost(lvl);
+    const cost = facilityCost(lvl, S);
     const me = club(S, S.userClub);
     if (me.budget < cost) return `تحتاج ${money(cost)}`;
     me.budget -= cost;
@@ -1274,27 +1355,36 @@
 
   // ---------- نهاية الموسم ----------
   function endSeason(S) {
-    const tb = table(S);
     const user = S.userClub;
+    const ul = userLeague(S);
+    const me = club(S, user);
+    const tb = table(S, ul.id);
+    const n = tb.length;
     const pos = tb.findIndex((r) => r.id === user) + 1;
     const champ = club(S, tb[0].id);
-    const players = Object.values(S.players).filter((p) => p.clubId);
+    const players = Object.values(S.players).filter((p) => p.clubId && club(S, p.clubId).league === ul.id);
     const scorer = players.slice().sort((a, b) => b.st.goals - a.st.goals)[0];
     const best = players.filter((p) => p.st.apps >= 10).sort((a, b) => b.st.rsum / b.st.apps - a.st.rsum / a.st.apps)[0];
-    tb.forEach((r, i) => { const c = club(S, r.id); c.budget += (S.clubs.length - i) * 900000 + (i === 0 ? 4000000 : 0); });
-    const prize = (S.clubs.length - pos + 1) * 900000 + (pos === 1 ? 4000000 : 0);
+    const prize = ul.econ.prize * (n - pos + 1) + (pos === 1 ? ul.econ.champ : 0);
     const target = S.board.target;
+    const relegated = pos > n - ul.relegate;
     let verdict;
-    if (pos <= target - 2) { verdict = 'المجلس سعيد جدًا: تجاوزت التوقعات بكثير'; S.board.conf = clamp(S.board.conf + 25, 0, 100); }
+    if (relegated) { verdict = 'هبط الفريق: المجلس قرر إنهاء مهمتك'; S.board.conf = 0; }
+    else if (pos <= target - 2) { verdict = 'المجلس سعيد جدًا: تجاوزت التوقعات بكثير'; S.board.conf = clamp(S.board.conf + 25, 0, 100); }
     else if (pos <= target) { verdict = 'المجلس راضٍ: حققت الهدف'; S.board.conf = clamp(S.board.conf + 12, 0, 100); }
     else if (pos <= target + 2) { verdict = 'المجلس قلق: أخفقت قليلًا في بلوغ الهدف'; S.board.conf = clamp(S.board.conf - 12, 0, 100); }
     else { verdict = 'المجلس غاضب: النتائج بعيدة عن المطلوب'; S.board.conf = clamp(S.board.conf - 25, 0, 100); }
-    S.history.push({ season: S.season, year: S.year, pos, pts: tb[pos - 1].pts, champ: champ.name, scorer: scorer ? `${scorer.name} (${scorer.st.goals})` : '—', best: best ? best.name : '—', verdict, target });
-    S.seasonEnd = { pos, champ: champ.name, scorer: scorer ? { name: scorer.name, goals: scorer.st.goals, club: club(S, scorer.clubId).name } : null, best: best ? { name: best.name, avg: round1(best.st.rsum / best.st.apps) } : null, prize, verdict, target, table: tb.map((r) => ({ id: r.id, pts: r.pts })) };
-    if (S.board.conf < 15) { S.gameOver = true; sendMsg(S, 'إقالة', `قرر مجلس الإدارة إنهاء عقدك بعد المركز ${pos}.`, 'board'); return; }
-    // السمعة
-    tb.forEach((r, i) => { const c = club(S, r.id); const exp = targetPosition(S, c.id); c.rep = clamp(Math.round(c.rep + (exp - (i + 1)) * 0.8), 30, 95); });
-    // الأعمار والاعتزال والعقود
+    const others = [];
+    for (const lg of S.leagues) {
+      const t = table(S, lg.id);
+      t.forEach((r, i) => { club(S, r.id).budget += lg.econ.prize * (t.length - i) + (i === 0 ? lg.econ.champ : 0); });
+      if (lg !== ul) others.push({ league: lg.name, champ: club(S, t[0].id).name });
+      t.forEach((r, i) => { const c = club(S, r.id); c.rep = clamp(Math.round(c.rep + (targetPosition(S, c.id) - (i + 1)) * 0.6), 30, 96); });
+    }
+    const label = `${S.year}/${S.year + 1}`;
+    S.history.push({ season: S.season, year: label, league: ul.short, pos, pts: tb[pos - 1].pts, champ: champ.name, scorer: scorer ? `${scorer.name} (${scorer.st.goals})` : '—', best: best ? best.name : '—', verdict, target });
+    S.seasonEnd = { label, pos, champ: champ.name, scorer: scorer ? { name: scorer.name, goals: scorer.st.goals, club: club(S, scorer.clubId).name } : null, best: best ? { name: best.name, avg: round1(best.st.rsum / best.st.apps) } : null, prize, verdict, target, others, relegated };
+    if (relegated || S.board.conf < 15) { S.gameOver = true; sendMsg(S, 'إقالة', `قرر مجلس الإدارة إنهاء عقدك بعد المركز ${pos}.`, 'board'); return; }
     const retired = [], left = [];
     for (const p of Object.values(S.players)) {
       p.age++;
@@ -1315,37 +1405,38 @@
       }
       p.value = playerValue(p);
     }
-    // دفعة الشباب
     const youth = [];
     const yl = S.facilities.youth;
     for (let k = 0; k < 2 + yl; k++) {
-      const p = genPlayer(S, { pos: pick(POS), age: ri(15, 17), target: ri(38, 46 + yl * 2), region: 'dz', clubId: user, potBoost: 8 + yl * 4 + (rand() < 0.12 * yl ? 12 : 0), contract: 3, know: 70 + yl * 5 });
-      p.wage = 500 + yl * 100;
+      const p = genPlayer(S, { pos: pick(POS), age: ri(16, 18), target: Math.round(me.level - 24 + yl * 2 + gauss() * 3), region: me.league === 'dz' ? 'dz' : 'en', clubId: user, potBoost: 8 + yl * 4 + (rand() < 0.12 * yl ? 12 : 0), contract: 3, know: 70 + yl * 5 });
+      p.gen = true;
+      p.wage = Math.round(ul.econ.wageMin * 0.4);
+      assignNumber(S, p);
       youth.push(p);
     }
     for (const c of S.clubs) {
       if (c.id === user) continue;
-      for (let k = 0; k < 2; k++) genPlayer(S, { pos: pick(POS), age: ri(16, 18), target: ri(40, 50), region: 'dz', clubId: c.id, potBoost: 10 });
-      let sq = squadOf(S, c.id);
-      for (const pos of SQUAD_TEMPLATE) {
-        const have = sq.filter((p) => p.pos === pos).length;
-        const need = SQUAD_TEMPLATE.filter((x) => x === pos).length;
-        if (have < need) { genPlayer(S, { pos, age: ri(21, 28), target: Math.round(42 + c.rep * 0.36 + gauss() * 3), region: 'dz', clubId: c.id }); sq = squadOf(S, c.id); }
-      }
+      for (let k = 0; k < 2; k++) { const p = genPlayer(S, { pos: pick(POS), age: ri(17, 19), target: Math.round(c.level - 20 + gauss() * 3), region: c.league === 'dz' ? 'dz' : 'en', clubId: c.id, potBoost: 10 }); p.gen = true; assignNumber(S, p); }
+      fillSquad(S, c, c.level);
     }
-    for (let i = 0; i < 10; i++) genPlayer(S, { pos: pick(POS), age: ri(19, 33), target: ri(48, 66), region: pick(['dz', 'ma', 'tn', 'eg', 'wa']), clubId: null, contract: 0 });
+    for (let i = 0; i < 12; i++) { const dz = i % 2 === 0; const p = genPlayer(S, { pos: pick(POS), age: ri(21, 33), target: dz ? ri(54, 64) : ri(64, 75), region: dz ? pick(['dz', 'ma', 'tn', 'eg', 'wa']) : pick(['en', 'sa', 'ee', 'wa']), clubId: null, contract: 0 }); p.gen = true; }
     S.seasonEnd.retired = retired;
     S.seasonEnd.left = left;
     S.seasonEnd.youth = youth.map((p) => p.id);
-    // موسم جديد
     S.season++;
     S.year++;
     S.week = 0;
     S.formLine = [];
+    for (const lg of S.leagues) {
+      lg.start = nextYear(lg.start);
+      lg.end = nextYear(lg.end);
+      lg.fixtures = genFixtures(lg.clubs.slice());
+      lg.dates = roundDates(lg.start, lg.end, lg.fixtures.length);
+      lg.played = 0;
+    }
+    for (const c of S.clubs) { c.level = clubLevel(S, c.id); validateLineup(S, c.id, S.tactics[c.id]); if (c.id !== user) autoPick(S, c.id, S.tactics[c.id]); }
     S.board.target = targetPosition(S, user);
-    S.fixtures = genFixtures(shuffle(S.clubs.map((c) => c.id)));
-    for (const c of S.clubs) { validateLineup(S, c.id, S.tactics[c.id]); if (c.id !== user) autoPick(S, c.id, S.tactics[c.id]); }
-    sendMsg(S, `انطلاق الموسم ${S.season}`, `هدف المجلس: المركز ${S.board.target} أو أفضل. انضم ${youth.length} لاعبين من أكاديمية الشباب.${retired.length ? ` اعتزل: ${retired.join('، ')}.` : ''}${left.length ? ` غادر بنهاية العقد: ${left.join('، ')}.` : ''}`, 'board');
+    sendMsg(S, `انطلاق موسم ${S.year}/${S.year + 1}`, `هدف المجلس: ${targetText(S)}. انضم ${youth.length} لاعبين من أكاديمية الشباب.${retired.length ? ` اعتزل: ${retired.join('، ')}.` : ''}${left.length ? ` غادر بنهاية العقد: ${left.join('، ')}.` : ''}`, 'board');
   }
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -1355,7 +1446,7 @@
     newGame, club, squadOf, available, ovrAt, familiarity, autoPick, validateLineup, profile, previewProfile, tacticalFactors,
     createMatch, stepMinute, simulate, substitute, refresh, applyMatch, report, expected, monteCarlo, recommend,
     table, position, userFixture, playRound, prepareAI, askingPrice, wageDemand, makeOffer, acceptOffer, rejectOffer, release, releaseCost,
-    renew, renewDemand, startScout, scoutPlayer, maxScouts, upgradeFacility, sendMsg, isKey, maxAttract,
+    renew, renewDemand, leagueOf, userLeague, clubLeague, fixtureDate, targetText, startScout, scoutPlayer, maxScouts, upgradeFacility, sendMsg, isKey, maxAttract,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = FM;
   else root.FM = FM;

@@ -2,18 +2,26 @@
 (function () {
   'use strict';
   const FM = window.FM;
-  const SAVE_KEY = 'dakka-save-v1';
+  const SAVE_KEY = 'dakka-save-v2';
   const esc = (s) => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = FM.money;
-  const num = (v) => `<span class="num ltr">${v}</span>`;
+  const num = (v) => `<bdi class="num" dir="ltr">${v}</bdi>`;
   const $m = (v) => `<span class="num ltr">${money(v)}</span>`;
   // زوج أرقام (نتيجة، أهداف متوقعة): الأول يظهر يمينًا ليوافق مكان صاحب الأرض أو فريقنا في الصفحة العربية
   const pair = (a, b, sep) => `<span class="pair num"><span>${a}</span><span class="sep">${sep || '–'}</span><span>${b}</span></span>`;
 
+  const MONTHS = ['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان', 'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  function fdate(iso, withDay) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T12:00:00Z');
+    return `${withDay ? DAYS[d.getUTCDay()] + ' ' : ''}${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  }
+
   let S = null;
   const UI = {
     view: 'start', tab: { analysis: 'next', transfers: 'market', league: 'table' }, sel: null, modal: null, toast: null,
-    sort: { key: 'role', dir: 1 }, start: { club: 5, name: '' }, filters: { pos: 'all', age: 40, ovr: 0, price: 0, free: false, q: '' },
+    sort: { key: 'role', dir: 1 }, start: { club: 'mca', league: 'dz', name: '' }, leagueTab: null, filters: { pos: 'all', age: 40, ovr: 0, price: 0, free: false, q: '' },
     round: null, lab: null, recCache: null, match: null, confirm: null, offerMsg: null,
   };
 
@@ -127,10 +135,10 @@
     const c = me();
     const unread = S.inbox.filter((x) => !x.read).length;
     const offers = S.offers.length;
-    const total = S.fixtures.length;
+    const total = FM.userLeague(S).fixtures.length;
     const live = UI.view === 'match';
     return `<header class="top"><div class="wrap">
-      <div class="brand">${crest(c, 34)}<div><div class="nm">${esc(c.name)}</div><div class="sub">${esc(S.manager)} · الموسم ${num(S.season)} · الجولة ${num(Math.min(S.week + 1, total))}/${num(total)}</div></div></div>
+      <div class="brand">${crest(c, 34)}<div><div class="nm">${esc(c.name)}</div><div class="sub">${esc(S.manager)} · ${esc(FM.userLeague(S).short)} ${num(S.year + '/' + (S.year + 1))} · الجولة ${num(Math.min(S.week + 1, total) + '/' + total)}${FM.fixtureDate(S) ? ' · ' + fdate(FM.fixtureDate(S)) : ''}</div></div></div>
       <div class="meta">
         <div><div class="k">الرصيد</div><div class="v ${c.budget < 0 ? 'bad' : ''}">${$m(c.budget)}</div></div>
         <div><div class="k">المركز</div><div class="v">${num(FM.position(S, c.id))} <span class="muted" style="font-weight:400">/ الهدف ${num(S.board.target)}</span></div></div>
@@ -144,34 +152,30 @@
   // ---------- شاشة البداية ----------
   function startView() {
     const saved = loadSave();
-    const sel = UI.start.club;
-    const clubs = FM.newGame ? previewClubs() : [];
+    const D = window.FM_DATA;
+    const L = D.LEAGUES.find((l) => l.id === UI.start.league) || D.LEAGUES[0];
+    const clubs = L.clubs.slice().sort((x, y) => y.rep - x.rep);
+    const sel = clubs.find((c) => c.k === UI.start.club) || clubs[0];
+    const expect = (c) => { const rank = clubs.indexOf(c) + 1; return rank === 1 ? 'مطالب باللقب' : rank <= L.europe + 1 ? 'المنافسة على المراكز الأولى' : rank <= clubs.length - L.relegate - 3 ? 'وسط الترتيب' : 'تجنب الهبوط'; };
+    const crestOf = (c) => crest({ short: c.short, color: c.c1, color2: c.c2 }, 38);
     return `<div class="wrap hero">
-      <div class="eyebrow">لعبة إدارة وتحليل كرة القدم</div>
+      <div class="eyebrow">لعبة إدارة وتحليل كرة القدم · موسم ${D.season}</div>
       <h1>دكّة <em>المدرب</em></h1>
-      <p>أنت المدير الفني: ترسم الخطة، تحلل الخصم، تكتشف المواهب وتطورها، تشتري وتبيع، ثم تقود فريقك من على الخط خلال المباراة. كل قرار تكتيكي يُحسب في محرك المحاكاة.</p>
-      ${saved && !saved.gameOver ? `<div class="row" style="margin-top:8px"><button class="btn pri" data-a="continue">متابعة المسيرة: ${esc(saved.clubs.find((c) => c.id === saved.userClub).name)} · الموسم ${num(saved.season)}</button><span class="muted">أو اختر ناديًا لمسيرة جديدة</span></div>` : ''}
+      <p>أندية حقيقية وتشكيلاتها بعد سوق انتقالات صيف 2026، ورزنامة الموسم بجولته الافتتاحية الحقيقية. أنت المدير الفني: ترسم الخطة، تحلل الخصم، تكتشف المواهب، تشتري وتبيع، ثم تقود فريقك من على الخط.</p>
+      ${saved && saved.v === 2 && !saved.gameOver ? `<div class="row" style="margin-top:8px"><button class="btn pri" data-a="continue">متابعة المسيرة: ${esc(saved.clubs.find((c) => c.id === saved.userClub).name)} · ${saved.year}/${saved.year + 1}</button><span class="muted">أو اختر ناديًا لمسيرة جديدة</span></div>` : ''}
     </div>
     <main class="wrap" style="padding-block:10px 20px">
-      <h3>اختر ناديك</h3>
-      <div class="clubs">${clubs.map((c, i) => `<button class="clubc ${sel === i ? 'on' : ''}" data-a="pickClub" data-i="${i}">
-        ${crest(c, 38)}<div><div class="nm">${esc(c.name)}</div>${stars(FM.toStars(42 + c.rep * 0.45), FM.toStars(42 + c.rep * 0.45))}</div>
-        <div class="d"><span>الميزانية ${$m(c.budget)}</span><span>${c.rep >= 80 ? 'منافس على اللقب' : c.rep >= 65 ? 'وسط الترتيب العلوي' : c.rep >= 52 ? 'وسط الترتيب' : 'صراع البقاء'}</span><span>${esc(FM.PRESETS[c.style].name)} · ${c.formation}</span></div>
+      <div class="row sp"><h3>اختر الدوري والنادي</h3><div class="tabs">${D.LEAGUES.map((l) => `<button class="${l.id === L.id ? 'on' : ''}" data-a="pickLeague" data-v="${l.id}">${esc(l.name)}</button>`).join('')}</div></div>
+      <p class="muted" style="font-size:.84rem;margin:6px 0 14px">${esc(L.country)} · ${clubs.length} ناديًا · ${(clubs.length - 1) * 2} جولة من ${fdate(L.start)} إلى ${fdate(L.end)} · يهبط ${L.relegate}</p>
+      <div class="clubs">${clubs.map((c) => `<button class="clubc ${sel === c ? 'on' : ''}" data-a="pickClub" data-v="${c.k}">
+        ${crestOf(c)}<div><div class="nm">${esc(c.name)}</div><div class="muted" style="font-size:.76rem">${esc(c.stadium)} · ${num(c.cap.toLocaleString('en'))}</div></div>
+        <div class="d"><span>الميزانية ${$m(c.budget)}</span><span>${expect(c)}</span><span>${esc(FM.PRESETS[c.style].name)} · ${c.form}</span></div>
       </button>`).join('')}</div>
     </main>
     <div class="startbar"><div class="wrap">
       <div class="field" style="flex:1;min-width:200px"><label for="mgr">اسم المدرب</label><input type="text" id="mgr" data-c="mgrName" value="${esc(UI.start.name)}" placeholder="مثال: جلال" maxlength="30"></div>
-      <button class="btn pri" data-a="newGame">ابدأ المسيرة مع ${esc(clubs[sel] ? clubs[sel].name : '')}</button>
+      <button class="btn pri" data-a="newGame" data-v="${sel.k}">ابدأ المسيرة مع ${esc(sel.name)}</button>
     </div></div>`;
-  }
-  let clubPreview = null;
-  function previewClubs() {
-    if (!clubPreview) {
-      const tmp = FM.newGame(0, 'x', 7);
-      clubPreview = tmp.clubs.map((c) => ({ name: c.name, short: c.short, color: c.color, color2: c.color2, rep: c.rep, budget: Math.max(c.budget, 4000000), style: c.style, formation: c.formation }));
-      FM.setSeed(Date.now() | 0);
-    }
-    return clubPreview;
   }
 
   // ---------- الرئيسية ----------
@@ -189,7 +193,7 @@
       const e = FM.expected(S, f.h, S.tactics[f.h], f.a, S.tactics[f.a]);
       next = `<div class="fixture">
         <div class="side">${crest(h, 54)}<div class="nm">${esc(h.name)}</div><div class="row" style="justify-content:center">${formChips(rows[h.id].form)}</div><div class="muted" style="font-size:.8rem">المركز ${num(rows[h.id].pos)}</div></div>
-        <div><div class="vs">الجولة ${num(S.week + 1)}</div><div class="score muted">ضد</div><div class="vs">أرض ${esc(h.short)}</div></div>
+        <div><div class="vs">الجولة ${num(S.week + 1)}</div><div class="score muted">ضد</div><div class="vs">${fdate(FM.fixtureDate(S), true)}</div><div class="vs">${esc(h.stadium)}</div></div>
         <div class="side">${crest(a, 54)}<div class="nm">${esc(a.name)}</div><div class="row" style="justify-content:center">${formChips(rows[a.id].form)}</div><div class="muted" style="font-size:.8rem">المركز ${num(rows[a.id].pos)}</div></div>
       </div>
       <div class="row sp" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
@@ -244,6 +248,7 @@
   }
 
   // ---------- الفريق ----------
+  const GEN = ' <span class="gen" title="لاعب مولَّد: لم نجد بيانات حقيقية لهذا المكان في التشكيلة">م</span>';
   const ROLE_ORDER = { GK: 0, CB: 1, LB: 2, RB: 3, DM: 4, CM: 5, AM: 6, LW: 7, RW: 8, ST: 9 };
   function squadView() {
     const sq = FM.squadOf(S, S.userClub);
@@ -254,9 +259,9 @@
     const th = (key, label, n) => `<th class="${n ? 'n' : ''} ${k === key ? 'on' : ''}" data-a="sort" data-k="${key}">${label}${k === key ? (d > 0 ? ' ▾' : ' ▴') : ''}</th>`;
     const wages = sq.reduce((a, p) => a + p.wage, 0);
     const value = sq.reduce((a, p) => a + p.value, 0);
-    return `<section class="panel"><div class="row sp" style="margin-bottom:12px"><h2>الفريق الأول</h2><div class="row muted" style="font-size:.86rem"><span>${num(sq.length)}/${FM.MAX_SQUAD} لاعبًا</span><span>القيمة ${$m(value)}</span><span>الأجور ${$m(wages)}/أسبوع</span></div></div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr>${th('role', 'المركز')}${th('name', 'اللاعب')}${th('age', 'العمر', 1)}${th('ovr', 'التقييم', 1)}${th('pot', 'الإمكانات')}${th('fit', 'اللياقة')}${th('morale', 'المعنويات', 1)}${th('form', 'الأداء', 1)}${th('goals', 'أهداف', 1)}${th('value', 'القيمة', 1)}${th('wage', 'الأجر', 1)}${th('contract', 'العقد', 1)}<th></th></tr></thead><tbody>
-    ${sq.map((p) => `<tr class="click" data-a="player" data-id="${p.id}"><td>${pos(p.pos)}${p.alt.length ? ` <span class="muted" style="font-size:.7rem">${p.alt.join(' ')}</span>` : ''}</td><td class="nm">${esc(p.name)} ${t.lineup.includes(p.id) ? '<span class="pill acc">أساسي</span>' : t.bench.includes(p.id) ? '<span class="pill">احتياط</span>' : ''}</td><td class="n">${p.age}</td><td class="n">${ovr(p.ovr)}</td><td>${potStars(p)}</td><td style="min-width:70px">${bar(p.fit)}</td><td class="n">${Math.round(p.morale)}</td><td class="n">${avgForm(p)}</td><td class="n">${p.st.goals}</td><td class="n">${money(p.value)}</td><td class="n">${money(p.wage)}</td><td class="n">${p.contract}س</td><td>${statusPills(p)}</td></tr>`).join('')}
+    return `<section class="panel"><div class="row sp" style="margin-bottom:12px"><h2>الفريق الأول</h2><div class="row muted" style="font-size:.86rem"><span>${num(sq.length + '/' + FM.MAX_SQUAD)} لاعبًا</span>${sq.some((p) => p.gen) ? `<span>${GEN} = لاعب مولَّد (${num(sq.filter((p) => p.gen).length)})</span>` : ''}<span>القيمة ${$m(value)}</span><span>الأجور ${$m(wages)}/أسبوع</span></div></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th class="n">#</th>${th('role', 'المركز')}${th('name', 'اللاعب')}${th('age', 'العمر', 1)}${th('ovr', 'التقييم', 1)}${th('pot', 'الإمكانات')}${th('fit', 'اللياقة')}${th('morale', 'المعنويات', 1)}${th('form', 'الأداء', 1)}${th('goals', 'أهداف', 1)}${th('value', 'القيمة', 1)}${th('wage', 'الأجر', 1)}${th('contract', 'العقد', 1)}<th></th></tr></thead><tbody>
+    ${sq.map((p) => `<tr class="click" data-a="player" data-id="${p.id}"><td class="n muted">${p.num || ''}</td><td>${pos(p.pos)}${p.alt.length ? ` <span class="muted" style="font-size:.7rem">${p.alt.join(' ')}</span>` : ''}</td><td class="nm">${esc(p.name)}${p.gen ? GEN : ''} ${t.lineup.includes(p.id) ? '<span class="pill acc">أساسي</span>' : t.bench.includes(p.id) ? '<span class="pill">احتياط</span>' : ''}</td><td class="n">${p.age}</td><td class="n">${ovr(p.ovr)}</td><td>${potStars(p)}</td><td style="min-width:70px">${bar(p.fit)}</td><td class="n">${Math.round(p.morale)}</td><td class="n">${avgForm(p)}</td><td class="n">${p.st.goals}</td><td class="n">${money(p.value)}</td><td class="n">${money(p.wage)}</td><td class="n">${p.contract}س</td><td>${statusPills(p)}</td></tr>`).join('')}
     </tbody></table></div></section>`;
   }
 
@@ -303,7 +308,7 @@
     }
     const st = p.st;
     return `<div class="overlay" data-a="closeBg"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(p.name)}">
-      <div class="mh">${c ? crest(c, 34) : ''}<div><h2>${esc(p.name)}</h2><div class="muted" style="font-size:.84rem">${esc(FM.POS_AR[p.pos])}${p.alt.length ? ` · يلعب أيضًا ${p.alt.map((r) => FM.POS_AR[r]).join('، ')}` : ''} · ${num(p.age)} سنة · ${esc(FM.REGIONS[p.region] ? FM.REGIONS[p.region].name : '')} · ${c ? esc(c.name) : p.discovered ? 'موهبة اكتشفها كشافونا' : 'لاعب حر'}</div></div><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
+      <div class="mh">${c ? crest(c, 34) : ''}<div><h2>${p.num && c ? `<span class="muted num">${p.num}</span> ` : ''}${esc(p.name)}${p.gen ? GEN : ''}</h2><div class="muted" style="font-size:.84rem">${esc(FM.POS_AR[p.pos])}${p.alt.length ? ` · يلعب أيضًا ${p.alt.map((r) => FM.POS_AR[r]).join('، ')}` : ''} · ${num(p.age)} سنة · ${p.discovered && FM.REGIONS[p.region] ? esc(FM.REGIONS[p.region].name) + ' · ' : ''}${c ? esc(c.name) : p.discovered ? 'موهبة اكتشفها كشافونا' : 'لاعب حر'}</div></div><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
       <div class="mb">
         <div class="grid g3">
           <div><div class="eyebrow">التقييم</div><div class="big">${ovr(p.ovr)}</div></div>
@@ -526,12 +531,12 @@
   function posChart(h) {
     const L = S.formLine;
     const W = 320, H = h || 140, pl = 22, pr = 8, pt = 8, pb = 16;
-    const n = S.fixtures.length;
-    const N = S.clubs.length;
+    const n = FM.userLeague(S).fixtures.length;
+    const N = FM.userLeague(S).clubs.length;
     const X = (i) => pl + (i / Math.max(1, n - 1)) * (W - pl - pr);
     const Y = (p) => pt + ((p - 1) / (N - 1)) * (H - pt - pb);
     let g = '';
-    for (const p of [1, 4, 8, 12]) g += `<line class="gr" x1="${pl}" x2="${W - pr}" y1="${Y(p)}" y2="${Y(p)}"/><text x="${pl - 5}" y="${Y(p) + 3}" text-anchor="end">${p}</text>`;
+    for (const p of [1, 5, 10, N]) g += `<line class="gr" x1="${pl}" x2="${W - pr}" y1="${Y(p)}" y2="${Y(p)}"/><text x="${pl - 5}" y="${Y(p) + 3}" text-anchor="end">${p}</text>`;
     g += `<line class="gr" x1="${pl}" x2="${W - pr}" y1="${Y(S.board.target)}" y2="${Y(S.board.target)}" style="stroke:var(--accent);opacity:.5"/>`;
     const pts = L.map((r, i) => `${X(i).toFixed(1)},${Y(r.pos || N).toFixed(1)}`).join(' ');
     const last = L[L.length - 1];
@@ -604,7 +609,7 @@
     const free = FM.maxScouts(S) - S.scouts.length;
     const sf = UI.scoutForm || { region: 'dz', pos: 'any', age: 'young' };
     const r = FM.REGIONS[sf.region];
-    return `<div class="row sp"><h2>شبكة الكشافة</h2><span class="muted">${num(S.scouts.length)}/${num(FM.maxScouts(S))} كشافين في مهام · مستوى الشبكة ${num(S.facilities.scouting)}</span></div>
+    return `<div class="row sp"><h2>شبكة الكشافة</h2><span class="muted">${num(S.scouts.length + '/' + FM.maxScouts(S))} كشافين في مهام · مستوى الشبكة ${num(S.facilities.scouting)}</span></div>
     <div class="grid g-side">
       <div class="stack">
         ${S.reports.length ? S.reports.map((rep) => `<section class="panel"><h3>${esc(FM.REGIONS[rep.region].name)} <span class="muted">${rep.pos === 'any' ? 'كل المراكز' : FM.POS_AR[rep.pos]} · ${rep.age === 'young' ? 'مواهب شابة' : 'لاعبون جاهزون'} · الموسم ${rep.season} الجولة ${rep.week + 1}</span></h3>
@@ -644,25 +649,32 @@
         <section class="panel"><h3>تطور الأسبوع الماضي</h3>${log.length ? `<div class="chips">${log.map(({ d, p }) => `<span class="pill ${d.to > d.from ? 'good' : 'bad'}">${esc(shortName(p.name))} <span class="num ltr">${d.from}→${d.to}</span></span>`).join('')}</div>` : '<div class="muted">لا تغير في التقييمات الأسبوع الماضي.</div>'}</section>
       </div>
       <div class="stack">
-        ${Object.keys(FM.FACILITY).map((k) => { const lvl = S.facilities[k]; const cost = FM.facilityCost(lvl); return `<section class="panel stack"><div class="row sp"><h3 style="margin:0">${FM.FACILITY[k].name}</h3><span class="num">${'■'.repeat(lvl)}<span class="muted">${'□'.repeat(5 - lvl)}</span></span></div><div class="muted" style="font-size:.84rem">${FM.FACILITY[k].desc}</div>${lvl < 5 ? `<button class="btn" data-a="upgrade" data-k="${k}" ${me().budget < cost ? 'disabled' : ''}>طوّر إلى المستوى ${lvl + 1} · ${money(cost)}</button>` : '<span class="pill good">المستوى الأعلى</span>'}</section>`; }).join('')}
+        ${Object.keys(FM.FACILITY).map((k) => { const lvl = S.facilities[k]; const cost = FM.facilityCost(lvl, S); return `<section class="panel stack"><div class="row sp"><h3 style="margin:0">${FM.FACILITY[k].name}</h3><span class="num">${'■'.repeat(lvl)}<span class="muted">${'□'.repeat(5 - lvl)}</span></span></div><div class="muted" style="font-size:.84rem">${FM.FACILITY[k].desc}</div>${lvl < 5 ? `<button class="btn" data-a="upgrade" data-k="${k}" ${me().budget < cost ? 'disabled' : ''}>طوّر إلى المستوى ${lvl + 1} · ${money(cost)}</button>` : '<span class="pill good">المستوى الأعلى</span>'}</section>`; }).join('')}
       </div>
     </div>`;
   }
 
   // ---------- الدوري ----------
   function leagueView() {
-    const tb = FM.table(S);
-    const r = UI.round === null ? Math.min(S.week, S.fixtures.length - 1) : UI.round;
-    const round = S.fixtures[r];
-    const players = Object.values(S.players).filter((p) => p.clubId);
+    const lid = UI.leagueTab || FM.userLeague(S).id;
+    const lg = FM.leagueOf(S, lid);
+    const tb = FM.table(S, lid);
+    const n = tb.length;
+    const mine = lg.id === FM.userLeague(S).id;
+    const cur = mine ? S.week : lg.played;
+    const r = UI.round === null || UI.roundLeague !== lid ? Math.min(cur, lg.fixtures.length - 1) : UI.round;
+    const round = lg.fixtures[r];
+    const players = Object.values(S.players).filter((p) => p.clubId && FM.club(S, p.clubId).league === lid);
     const scorers = players.filter((p) => p.st.goals).sort((a, b) => b.st.goals - a.st.goals).slice(0, 10);
     const assists = players.filter((p) => p.st.assists).sort((a, b) => b.st.assists - a.st.assists).slice(0, 6);
-    return `<div class="grid g-side">
-      <section class="panel"><h3>جدول الترتيب</h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th class="n">#</th><th>النادي</th><th class="n">لعب</th><th class="n">ف</th><th class="n">ت</th><th class="n">خ</th><th class="n">له</th><th class="n">عليه</th><th class="n">±</th><th class="n">نقاط</th><th>آخر 5</th></tr></thead><tbody>${tb.map((row, i) => { const c = FM.club(S, row.id); return `<tr class="${row.id === S.userClub ? 'me' : ''}"><td class="n">${i + 1}</td><td><span class="row" style="gap:8px;flex-wrap:nowrap">${crest(c, 18)}${esc(c.name)}</span></td><td class="n">${row.p}</td><td class="n">${row.w}</td><td class="n">${row.d}</td><td class="n">${row.l}</td><td class="n">${row.gf}</td><td class="n">${row.ga}</td><td class="n"><span class="ltr">${row.gf - row.ga > 0 ? '+' : ''}${row.gf - row.ga}</span></td><td class="n"><b>${row.pts}</b></td><td>${formChips(row.form)}</td></tr>`; }).join('')}</tbody></table></div>
-        <div class="muted" style="font-size:.8rem;margin-top:8px">الأول بطل ويحصل على مكافأة إضافية ${money(4000000)}. كل مركز أعلى يرفع جائزة نهاية الموسم.</div></section>
+    const zone = (i) => (i < lg.europe ? 'z-eu' : i >= n - lg.relegate ? 'z-rel' : '');
+    return `<div class="row sp"><h2>${esc(lg.name)}</h2><div class="tabs">${S.leagues.map((l) => `<button class="${l.id === lid ? 'on' : ''}" data-a="leagueTab" data-v="${l.id}">${esc(l.short)}</button>`).join('')}</div></div>
+    <div class="grid g-side">
+      <section class="panel"><h3>جدول الترتيب <span class="muted">بعد ${num(lg.played)} جولة</span></h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th class="n">#</th><th>النادي</th><th class="n">لعب</th><th class="n">ف</th><th class="n">ت</th><th class="n">خ</th><th class="n">له</th><th class="n">عليه</th><th class="n">±</th><th class="n">نقاط</th><th>آخر 5</th></tr></thead><tbody>${tb.map((row, i) => { const c = FM.club(S, row.id); return `<tr class="${row.id === S.userClub ? 'me' : ''} ${zone(i)}"><td class="n">${i + 1}</td><td><span class="row" style="gap:8px;flex-wrap:nowrap">${crest(c, 18)}${esc(c.name)}</span></td><td class="n">${row.p}</td><td class="n">${row.w}</td><td class="n">${row.d}</td><td class="n">${row.l}</td><td class="n">${row.gf}</td><td class="n">${row.ga}</td><td class="n"><span class="ltr">${row.gf - row.ga > 0 ? '+' : ''}${row.gf - row.ga}</span></td><td class="n"><b>${row.pts}</b></td><td>${formChips(row.form)}</td></tr>`; }).join('')}</tbody></table></div>
+        <div class="legend" style="margin-top:10px"><span><i style="background:var(--info)"></i>المراكز القارية (${lg.europe})</span><span><i style="background:var(--bad)"></i>الهبوط (${lg.relegate})</span><span>جائزة البطل والمراكز: ${money(lg.econ.prize * n + lg.econ.champ)} للأول</span></div></section>
       <div class="stack">
-        <section class="panel"><div class="row sp" style="margin-bottom:10px"><button class="btn sm" data-a="round" data-v="${r - 1}" ${r <= 0 ? 'disabled' : ''}>▸ السابقة</button><h3 style="margin:0">الجولة ${num(r + 1)}</h3><button class="btn sm" data-a="round" data-v="${r + 1}" ${r >= S.fixtures.length - 1 ? 'disabled' : ''}>التالية ◂</button></div>
-          ${round.map((f) => { const h = FM.club(S, f.h), a = FM.club(S, f.a); const mine = f.h === S.userClub || f.a === S.userClub; return `<div class="row sp" style="padding:6px 0;border-bottom:1px solid var(--line);${mine ? 'color:var(--accent)' : ''}"><span style="flex:1">${esc(h.short)}</span><b>${f.hg === null ? '–' : pair(f.hg, f.ag, ':')}</b><span style="flex:1;text-align:left">${esc(a.short)}</span></div>`; }).join('')}</section>
+        <section class="panel"><div class="row sp" style="margin-bottom:10px"><button class="btn sm" data-a="round" data-l="${lid}" data-v="${r - 1}" ${r <= 0 ? 'disabled' : ''}>▸ السابقة</button><div style="text-align:center"><h3 style="margin:0">الجولة ${num(r + 1)}</h3><div class="muted" style="font-size:.76rem">${fdate(lg.dates[r], true)}${r === 0 && S.season === 1 ? ' · الجولة الحقيقية' : ''}</div></div><button class="btn sm" data-a="round" data-l="${lid}" data-v="${r + 1}" ${r >= lg.fixtures.length - 1 ? 'disabled' : ''}>التالية ◂</button></div>
+          ${round.map((f) => { const h = FM.club(S, f.h), a = FM.club(S, f.a); const my = f.h === S.userClub || f.a === S.userClub; return `<div class="row sp" style="padding:6px 0;border-bottom:1px solid var(--line);${my ? 'color:var(--accent)' : ''}"><span style="flex:1">${esc(h.short)}</span><b>${f.hg === null ? '–' : pair(f.hg, f.ag, ':')}</b><span style="flex:1;text-align:left">${esc(a.short)}</span></div>`; }).join('')}</section>
         <section class="panel"><h3>الهدافون</h3>${scorers.map((p, i) => `<div class="row sp" data-a="player" data-id="${p.id}" style="cursor:pointer;font-size:.88rem"><span>${i + 1}. ${esc(p.name)} <span class="muted">${esc(FM.club(S, p.clubId).short)}</span></span><b class="num">${p.st.goals}</b></div>`).join('') || '<div class="muted">—</div>'}</section>
         <section class="panel"><h3>التمريرات الحاسمة</h3>${assists.map((p, i) => `<div class="row sp" data-a="player" data-id="${p.id}" style="cursor:pointer;font-size:.88rem"><span>${i + 1}. ${esc(p.name)} <span class="muted">${esc(FM.club(S, p.clubId).short)}</span></span><b class="num">${p.st.assists}</b></div>`).join('') || '<div class="muted">—</div>'}</section>
       </div>
@@ -693,12 +705,12 @@
     <div class="grid g3">
       <section class="panel"><div class="eyebrow">الرصيد الحالي</div><div class="big ${c.budget < 0 ? 'bad' : ''}">${$m(c.budget)}</div></section>
       <section class="panel"><div class="eyebrow">فاتورة الأجور الأسبوعية</div><div class="big">${$m(wages)}</div><div class="muted" style="font-size:.8rem">${num(sq.length)} لاعبًا</div></section>
-      <section class="panel"><div class="eyebrow">جائزة المركز الحالي (${pos})</div><div class="big">${$m((S.clubs.length - pos + 1) * 900000 + (pos === 1 ? 4000000 : 0))}</div><div class="muted" style="font-size:.8rem">تُصرف في نهاية الموسم</div></section>
+      <section class="panel"><div class="eyebrow">جائزة المركز الحالي (${pos})</div><div class="big">${$m(FM.userLeague(S).econ.prize * (FM.userLeague(S).clubs.length - pos + 1) + (pos === 1 ? FM.userLeague(S).econ.champ : 0))}</div><div class="muted" style="font-size:.8rem">تُصرف في نهاية الموسم</div></section>
     </div>
     <div class="grid g-side">
       <section class="panel"><h3>تطور الرصيد</h3>${chart}</section>
-      <section class="panel"><h3>الأسبوع الماضي</h3>${fw ? `<dl class="kv"><dt>الرعاية</dt><dd class="good">${$m(fw.sponsor)}</dd><dt>التذاكر</dt><dd class="good">${fw.tickets ? $m(fw.tickets) : '<span class="muted">مباراة خارج الأرض</span>'}</dd><dt>الأجور</dt><dd class="bad">${$m(-fw.wages)}</dd><dt>الصافي</dt><dd><b>${$m(fw.sponsor + fw.tickets - fw.wages)}</b></dd></dl>` : '<div class="muted">لا حركة بعد</div>'}
-        <p class="muted" style="font-size:.82rem;margin:12px 0 0">الملعب يتسع لـ${num(c.capacity.toLocaleString('en'))} متفرج. الحضور يرتفع مع سمعة النادي وثقة الجماهير وقوة الخصم.</p></section>
+      <section class="panel"><h3>الأسبوع الماضي</h3>${fw ? `<dl class="kv"><dt>حقوق البث</dt><dd class="good">${$m(fw.tv || 0)}</dd><dt>الرعاية</dt><dd class="good">${$m(fw.sponsor)}</dd><dt>التذاكر</dt><dd class="good">${fw.tickets ? $m(fw.tickets) : '<span class="muted">مباراة خارج الأرض</span>'}</dd><dt>الأجور</dt><dd class="bad">${$m(-fw.wages)}</dd><dt>التشغيل</dt><dd class="bad">${$m(-(fw.opex || 0))}</dd><dt>الصافي</dt><dd><b>${$m((fw.tv || 0) + fw.sponsor + fw.tickets - fw.wages - (fw.opex || 0))}</b></dd></dl>` : '<div class="muted">لا حركة بعد</div>'}
+        <p class="muted" style="font-size:.82rem;margin:12px 0 0">${esc(c.stadium)} يتسع لـ${num(c.capacity.toLocaleString('en'))} متفرج. الحضور يرتفع مع سمعة النادي وثقة الجماهير وقوة الخصم.</p></section>
     </div>`;
   }
 
@@ -735,6 +747,308 @@
   }
 
   // ---------- المباراة المباشرة ----------
+  // المحرك يقرر ما يحدث في كل دقيقة، والمخرج هنا يحوّلها إلى لقطات: تمريرات بين اللاعبين في أماكنهم،
+  // كتلة الفريقين تتحرك مع الكرة، ثم تسديدة تنتهي في الشباك أو بين يدي الحارس أو بجانب القائم.
+  // الإحداثيات بالأمتار على ملعب 105×68؛ صاحب الأرض يدافع عن المرمى الأيمن ويهاجم نحو اليسار.
+  const PW = 105, PH = 68, GOAL_HALF = 3.66;
+  const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const toPitch = (k, d, w) => (k === 0 ? { x: PW - (d / 100) * PW, y: PH - (w / 100) * PH } : { x: (d / 100) * PW, y: (w / 100) * PH });
+  const toTeam = (k, x, y) => (k === 0 ? { d: ((PW - x) / PW) * 100, w: ((PH - y) / PH) * 100 } : { d: (x / PW) * 100, w: (y / PH) * 100 });
+  const attackGoalX = (k) => (k === 0 ? 0 : PW);
+  // نقطة أمام المرمى الذي يهاجمه الفريق k، على بعد distM متر وانحراف lat عن المنتصف
+  const goalPoint = (k, distM, lat) => ({ x: k === 0 ? distM : PW - distM, y: PH / 2 + lat });
+  const sideOf = (m, id) => (m.sides[0].on.some((e) => e.id === id) ? 0 : m.sides[1].on.some((e) => e.id === id) ? 1 : -1);
+  const roleOf = (m, id) => { for (const sd of m.sides) { const e = sd.on.find((x) => x.id === id); if (e) return e.role; } return null; };
+  const gkId = (m, k) => { const e = m.sides[k].on.find((x) => x.role === 'GK'); return e ? e.id : null; };
+
+  function shapeTargets(m, ball, possK) {
+    const out = {};
+    m.sides.forEach((sd, k) => {
+      const slots = FM.FORMATIONS[sd.tactic.formation];
+      const b = toTeam(k, ball.x, ball.y);
+      const inPoss = possK === k;
+      const lineAdj = (sd.tactic.line - 1) * 4;
+      for (const e of sd.on) {
+        const sl = slots[e.slot] || slots[0];
+        let d, w;
+        if (e.role === 'GK') { d = Math.min(14, 3 + b.d * 0.09); w = 50 + (b.w - 50) * 0.22; }
+        else {
+          d = sl[1] * (inPoss ? 0.74 : 0.6) + b.d * (inPoss ? 0.37 : 0.31) + (inPoss ? 7 : -1) + lineAdj;
+          w = 50 + (sl[2] - 50) * (inPoss ? 1.1 : 0.76) + (b.w - 50) * 0.3;
+        }
+        out[e.id] = toPitch(k, clampN(d, 1.5, 95), clampN(w, 3, 97));
+      }
+    });
+    return out;
+  }
+  function nearestId(ids, pos, pt) {
+    let best = null, bd = Infinity;
+    for (const id of ids) { const p = pos[id]; if (!p) continue; const d = dist(p, pt); if (d < bd) { bd = d; best = id; } }
+    return best;
+  }
+  // ألوان القمصان: إن تشابه لون الفريقين يلبس الضيف قميصه البديل، ولكل حارس لون مختلف
+  function kits(h, a) {
+    const rgb = (c) => { const x = parseInt(c.slice(1), 16); return [x >> 16, (x >> 8) & 255, x & 255]; };
+    const diff = (c1, c2) => { const p = rgb(c1), q = rgb(c2); return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]); };
+    const home = { fill: h.color, ink: h.color2 };
+    let away = { fill: a.color, ink: a.color2 };
+    if (diff(h.color, a.color) < 150) away = diff(h.color, a.color2) >= 150 ? { fill: a.color2, ink: a.color } : { fill: '#f4f4f4', ink: '#151515' };
+    return [home, away, { fill: '#19a974', ink: '#0b2318' }, { fill: '#e9c21b', ink: '#231c03' }];
+  }
+
+  function kickoffBeat(m, k) {
+    const st = m.sides[k].on.find((e) => e.role === 'ST') || m.sides[k].on.find((e) => e.role === 'AM') || m.sides[k].on[m.sides[k].on.length - 1];
+    return { kind: 'kickoff', ms: 1100, ball: { x: PW / 2, y: PH / 2 }, holder: st ? st.id : null, poss: k, special: 'kickoff' };
+  }
+
+  function plan(L, tl) {
+    const m = L.m, W = L.world, k = tl.s, ev = tl.ev || { shots: [], foul: null, corner: false };
+    const q = [];
+    const fast = L.speed >= 3;
+    let ball = { x: W.ball.x, y: W.ball.y };
+    let holder = W.carrier;
+    const push = (b) => { q.push(b); if (b.ball) ball = b.ball; if (b.holder !== undefined) holder = b.holder; };
+    const mates = () => m.sides[k].on.map((e) => e.id);
+    const opp = 1 - k;
+    // يمرر إلى أقرب زميل من مكانه المتوقع عند النقطة pt
+    const passTo = (pt, forced, arc) => {
+      const shape = shapeTargets(m, pt, k);
+      const deep = toTeam(k, pt.x, pt.y).d < 25;
+      const r = forced || nearestId(mates().filter((id) => id !== holder && (deep || roleOf(m, id) !== 'GK')), shape, pt);
+      if (!r) return;
+      const dest = forced ? pt : { x: shape[r].x * 0.35 + pt.x * 0.65, y: shape[r].y * 0.35 + pt.y * 0.65 };
+      const d = dist(ball, dest);
+      push({ kind: 'pass', ms: clampN(d * 48, 420, 1150), ball: dest, holder: r, poss: k, arc: arc !== undefined ? arc : d > 28 ? 3.5 : 0, pin: { [r]: dest } });
+    };
+    // 1) افتكاك الكرة إن كانت عند الخصم
+    if (!holder || sideOf(m, holder) !== k) {
+      const w = nearestId(mates().filter((id) => roleOf(m, id) !== 'GK' || toTeam(k, ball.x, ball.y).d < 12), W.pos, ball);
+      push({ kind: 'win', ms: 420, ball: { x: clampN(ball.x + rnd(-2, 2), 1, PW - 1), y: clampN(ball.y + rnd(-2, 2), 1, PH - 1) }, holder: w, poss: k });
+    }
+    const shots = ev.shots.filter((s) => s.side === k);
+    // 2) البناء: تمريرات تتقدم نحو المنطقة التي وصلتها الكرة هذه الدقيقة
+    const td = shots.length ? 62 : clampN(k === 0 ? tl.x : 100 - tl.x, 22, 84);
+    const tw = k === 0 ? tl.y : 100 - tl.y;
+    const nPass = fast ? 1 : shots.length ? 2 : 2 + (Math.random() < 0.45 ? 1 : 0);
+    const cur = toTeam(k, ball.x, ball.y);
+    for (let i = 1; i <= nPass; i++) {
+      const d = cur.d + (td - cur.d) * (i / nPass) + rnd(-5, 5);
+      const w = i === nPass ? tw : clampN(cur.w + rnd(-30, 30), 6, 94);
+      passTo(toPitch(k, clampN(d, 8, 88), clampN(w, 6, 94)));
+      if (!fast && Math.random() < 0.35 && holder) {
+        const t = toTeam(k, ball.x, ball.y);
+        const to = toPitch(k, clampN(t.d + rnd(4, 9), 5, 90), clampN(t.w + rnd(-5, 5), 4, 96));
+        push({ kind: 'carry', ms: 650, ball: to, holder, poss: k, pin: { [holder]: to } });
+      }
+    }
+    // 3) الفرص
+    for (const s of shots) {
+      const shooter = s.id;
+      const gx = attackGoalX(k), inward = gx === 0 ? 1 : -1;
+      if (s.kind === 'pen') {
+        const spot = goalPoint(k, 11, 0);
+        push({ kind: 'set', ms: 1300, ball: spot, holder: shooter, poss: k, special: 'pen', cap: 'ركلة جزاء!', pin: { [shooter]: { x: spot.x - inward * 1.6, y: spot.y + 0.6 } } });
+      } else if (s.kind === 'fk') {
+        const spot = goalPoint(k, rnd(20, 26), rnd(-9, 9));
+        push({ kind: 'set', ms: 1100, ball: spot, holder: shooter, poss: k, special: 'wall', cap: 'ركلة حرة مباشرة', pin: { [shooter]: { x: spot.x - inward * 1.4, y: spot.y } } });
+      } else if (s.kind === 'corner') {
+        const flag = { x: gx === 0 ? 0.7 : PW - 0.7, y: Math.random() < 0.5 ? 0.7 : PH - 0.7 };
+        const taker = m.sides[k].on.find((e) => ['LW', 'RW', 'AM', 'CM'].includes(e.role) && e.id !== shooter) || m.sides[k].on[1];
+        push({ kind: 'set', ms: 1100, ball: flag, holder: taker.id, poss: k, special: 'corner', cap: 'ركنية', pin: { [taker.id]: flag } });
+        const spot = goalPoint(k, rnd(5.5, 11), rnd(-6, 6));
+        push({ kind: 'cross', ms: 1000, ball: spot, holder: shooter, poss: k, special: 'corner', arc: 7, pin: { [shooter]: spot } });
+      } else {
+        if (s.as && s.as !== holder && sideOf(m, s.as) === k) {
+          const wide = s.kind === 'header';
+          const pt = wide ? goalPoint(k, rnd(13, 22), (Math.random() < 0.5 ? -1 : 1) * rnd(20, 29)) : goalPoint(k, rnd(24, 34), rnd(-14, 14));
+          passTo(pt, s.as);
+        }
+        if (s.kind === 'header') {
+          const spot = goalPoint(k, rnd(6, 10), rnd(-4, 4));
+          push({ kind: 'cross', ms: 950, ball: spot, holder: shooter, poss: k, arc: 6, pin: { [shooter]: spot } });
+        } else if (s.kind === 'big') {
+          const spot = goalPoint(k, rnd(8, 13), rnd(-7, 7));
+          push({ kind: 'through', ms: 900, ball: spot, holder: shooter, poss: k, pin: { [shooter]: spot } });
+        } else {
+          const spot = s.kind === 'long' ? goalPoint(k, rnd(23, 30), rnd(-12, 12)) : goalPoint(k, rnd(12, 18), rnd(-11, 11));
+          if (holder !== shooter) passTo(spot, shooter, 0);
+          else push({ kind: 'carry', ms: 600, ball: spot, holder: shooter, poss: k, pin: { [shooter]: spot } });
+        }
+      }
+      const gk = gkId(m, opp);
+      let end;
+      if (s.out === 'goal') end = { x: gx - inward * 1.3, y: PH / 2 + rnd(-3.1, 3.1) };
+      else if (s.out === 'save') end = { x: gx + inward * rnd(0.8, 2.4), y: PH / 2 + rnd(-3.2, 3.2) };
+      else end = { x: gx - inward * 1.8, y: PH / 2 + (Math.random() < 0.5 ? -1 : 1) * rnd(GOAL_HALF + 0.8, GOAL_HALF + 7) };
+      const pin = {};
+      if (gk) pin[gk] = s.out === 'save' ? end : { x: gx + inward * 1.4, y: PH / 2 + (end.y - PH / 2) * 0.45 + (s.out === 'goal' ? (Math.random() < 0.5 ? -1.8 : 1.8) : 0) };
+      const p = S.players[shooter];
+      push({ kind: 'shot', ms: 560, ball: end, holder: null, poss: k, arc: s.kind === 'long' ? 2.2 : s.kind === 'corner' || s.kind === 'header' ? 1.2 : 0.8, pin, shot: s, cap: s.out === 'goal' ? null : s.out === 'save' ? `تصدٍّ! ${gk ? shortName(S.players[gk].name) : ''}` : `${p ? shortName(p.name) : ''}… بجانب القائم` });
+      if (s.out === 'goal') {
+        push({ kind: 'celebrate', ms: 1900, ball: end, holder: null, poss: k, celebrate: shooter });
+        push(kickoffBeat(m, opp));
+      } else if (s.out === 'save') {
+        push({ kind: 'hold', ms: 750, ball: { x: end.x + inward * 0.6, y: end.y }, holder: gk, poss: opp, pin: gk ? { [gk]: end } : {} });
+      } else {
+        const kick = { x: gx + inward * 5.5, y: PH / 2 + rnd(-8, 8) };
+        push({ kind: 'goalkick', ms: 900, ball: kick, holder: gk, poss: opp, cap: 'ركلة مرمى', pin: gk ? { [gk]: { x: kick.x - inward * 1.2, y: kick.y } } : {} });
+      }
+    }
+    // ركنية تبعدها الدفاعات دون تسديد
+    if (ev.corner && !shots.some((s) => s.kind === 'corner') && !shots.some((s) => s.out === 'goal')) {
+      const gx = attackGoalX(k);
+      const flag = { x: gx === 0 ? 0.7 : PW - 0.7, y: Math.random() < 0.5 ? 0.7 : PH - 0.7 };
+      const taker = m.sides[k].on.find((e) => ['LW', 'RW', 'AM', 'CM'].includes(e.role)) || m.sides[k].on[1];
+      push({ kind: 'set', ms: 1000, ball: flag, holder: taker.id, poss: k, special: 'corner', cap: 'ركنية', pin: { [taker.id]: flag } });
+      const header = m.sides[opp].on.find((e) => e.role === 'CB') || m.sides[opp].on[1];
+      const spot = goalPoint(k, rnd(6, 10), rnd(-5, 5));
+      push({ kind: 'cross', ms: 950, ball: spot, holder: header.id, poss: opp, special: 'corner', arc: 7, pin: { [header.id]: spot } });
+      push({ kind: 'clear', ms: 800, ball: goalPoint(k, rnd(26, 36), rnd(-18, 18)), holder: null, poss: opp, arc: 5, cap: 'إبعاد' });
+    }
+    if (ev.foul && !shots.length) push({ kind: 'foul', ms: 700, ball, holder, poss: k, cap: 'خطأ' });
+    q.push({ kind: 'hud', ms: 0 });
+    return q;
+  }
+
+  function startBeat(L, b, now) {
+    const m = L.m, W = L.world;
+    const ballTo = b.ball || W.ball;
+    const possK = b.poss !== undefined ? b.poss : W.carrier ? sideOf(m, W.carrier) : 0;
+    const to = shapeTargets(m, ballTo, possK);
+    if (b.special === 'kickoff') {
+      for (const [k, sd] of m.sides.entries()) for (const e of sd.on) {
+        const t = toTeam(k, to[e.id].x, to[e.id].y);
+        to[e.id] = toPitch(k, Math.min(t.d, 46), t.w);
+      }
+    } else if (b.special === 'corner' || b.special === 'pen' || b.special === 'wall') {
+      const k = possK, gxK = attackGoalX(k);
+      const attackers = m.sides[k].on.filter((e) => e.role !== 'GK' && e.id !== b.holder);
+      const defenders = m.sides[1 - k].on.filter((e) => e.role !== 'GK');
+      if (b.special === 'corner') {
+        attackers.filter((e) => ['CB', 'ST', 'AM', 'CM', 'DM'].includes(e.role)).slice(0, 5).forEach((e) => { to[e.id] = goalPoint(k, rnd(5, 14), rnd(-10, 10)); });
+        defenders.slice(0, 7).forEach((e, i) => { to[e.id] = goalPoint(k, i < 2 ? 1.5 : rnd(4, 12), i === 0 ? -GOAL_HALF : i === 1 ? GOAL_HALF : rnd(-9, 9)); });
+      } else if (b.special === 'pen') {
+        attackers.concat(defenders).forEach((e, i) => { const a = (i / Math.max(1, attackers.length + defenders.length - 1)) * 1.6 - 0.8; to[e.id] = { x: gxK === 0 ? 18 + Math.cos(a) * 2 : PW - 18 - Math.cos(a) * 2, y: PH / 2 + Math.sin(a) * 16 }; });
+      } else {
+        const dir = { x: gxK - ballTo.x, y: PH / 2 - ballTo.y };
+        const len = Math.hypot(dir.x, dir.y) || 1;
+        const wx = ballTo.x + (dir.x / len) * 9.15, wy = ballTo.y + (dir.y / len) * 9.15;
+        defenders.slice(0, 4).forEach((e, i) => { to[e.id] = { x: wx + (-dir.y / len) * (i - 1.5) * 0.9, y: wy + (dir.x / len) * (i - 1.5) * 0.9 }; });
+      }
+    }
+    if (b.holder) {
+      const hk = sideOf(m, b.holder);
+      to[b.holder] = { x: ballTo.x + (hk === 0 ? 0.9 : -0.9), y: ballTo.y };
+      // أقرب مدافع يضغط على حامل الكرة
+      const presser = nearestId(m.sides[1 - hk].on.filter((e) => e.role !== 'GK').map((e) => e.id), to, ballTo);
+      if (presser && !b.special) {
+        const own = { x: hk === 0 ? PW : 0, y: PH / 2 };
+        const v = { x: own.x - ballTo.x, y: own.y - ballTo.y }, len = Math.hypot(v.x, v.y) || 1;
+        to[presser] = { x: ballTo.x + (v.x / len) * 2.4, y: ballTo.y + (v.y / len) * 2.4 };
+      }
+    }
+    if (b.celebrate) {
+      const sk = sideOf(m, b.celebrate);
+      const spot = { x: clampN(ballTo.x + (sk === 0 ? 10 : -10), 4, PW - 4), y: clampN(ballTo.y + rnd(-14, 14), 6, PH - 6) };
+      to[b.celebrate] = spot;
+      m.sides[sk].on.filter((e) => e.role !== 'GK' && e.id !== b.celebrate).forEach((e, i) => { to[e.id] = { x: spot.x + Math.cos(i) * (2 + (i % 3)), y: spot.y + Math.sin(i) * (2 + (i % 3)) }; });
+    }
+    Object.assign(to, b.pin || {});
+    for (const id in to) if (!W.pos[id]) W.pos[id] = { x: PW / 2, y: -1.5 };
+    const from = {};
+    for (const id in to) from[id] = { x: W.pos[id].x, y: W.pos[id].y };
+    W.beat = Object.assign({}, b, { t0: now, dur: b.ms * [0, 1, 0.55, 0.3][L.speed], from, to, ballFrom: { x: W.ball.x, y: W.ball.y }, ballTo });
+    if (b.cap) caption(b.cap);
+    if (b.kind === 'shot') trail(W.ball, ballTo);
+  }
+  function endBeat(L) {
+    const W = L.world, b = W.beat;
+    for (const id in b.to) W.pos[id] = b.to[id];
+    W.ball = b.ballTo;
+    if (b.holder !== undefined) W.carrier = b.holder;
+    W.beat = null;
+    if (b.kind === 'shot' && b.shot.out === 'goal') { updateHud(true); }
+    if (b.kind === 'hud') updateHud(false);
+    if (b.kind === 'half') { L.paused = true; L.note = 'استراحة ما بين الشوطين: راجع الخطة والتبديلات ثم استأنف'; renderMatchControls(); }
+  }
+  const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+  function frame(now) {
+    const L = UI.match;
+    if (!L || UI.view !== 'match') return;
+    L.raf = requestAnimationFrame(frame);
+    const W = L.world;
+    if (!W.beat && !L.paused) {
+      if (!L.queue.length && !L.m.finished) advanceMinute(L);
+      if (L.queue.length) startBeat(L, L.queue.shift(), now);
+    }
+    const b = W.beat;
+    if (!b) return;
+    const t = b.dur <= 0 ? 1 : Math.min(1, (now - b.t0) / b.dur);
+    const e = ease(t);
+    const pos = {};
+    for (const id in b.to) pos[id] = { x: b.from[id].x + (b.to[id].x - b.from[id].x) * e, y: b.from[id].y + (b.to[id].y - b.from[id].y) * e };
+    const bt = b.kind === 'shot' ? t : e;
+    const ball = { x: b.ballFrom.x + (b.ballTo.x - b.ballFrom.x) * bt, y: b.ballFrom.y + (b.ballTo.y - b.ballFrom.y) * bt, z: (b.arc || 0) * Math.sin(Math.PI * bt) };
+    draw(L, pos, ball, t >= 0.6 ? b.holder : W.carrier);
+    if (t >= 1) endBeat(L);
+  }
+  function advanceMinute(L) {
+    const m = L.m;
+    FM.stepMinute(S, m);
+    const tl = m.tl[m.tl.length - 1];
+    L.queue = plan(L, tl);
+    if (m.minute === 45) { L.queue.push({ kind: 'half', ms: 0 }); L.queue.push(kickoffBeat(m, 1)); }
+    const clock = document.getElementById('lv-clock');
+    if (clock) clock.textContent = `${m.minute > 90 ? '90+' + (m.minute - 90) : m.minute}'${m.minute <= 45 ? ' · الشوط 1' : ' · الشوط 2'}`;
+  }
+  function draw(L, pos, ball, holder) {
+    const g = document.getElementById('lv-dots');
+    if (!g) return;
+    const m = L.m;
+    const K = L.kits;
+    const seen = new Set();
+    m.sides.forEach((sd, k) => {
+      for (const e of sd.on) {
+        seen.add(e.id);
+        let el = document.getElementById('d-' + e.id);
+        if (!el) {
+          const kit = e.role === 'GK' ? K[2 + k] : K[k];
+          const p = S.players[e.id];
+          g.insertAdjacentHTML('beforeend', `<g class="pl" id="d-${e.id}"><circle r="1.55" fill="${kit.fill}" stroke="${kit.ink}" stroke-width="0.3"/><text fill="${kit.ink}" y="0.08">${p ? p.num : ''}</text></g>`);
+          el = document.getElementById('d-' + e.id);
+        }
+        const p = pos[e.id] || L.world.pos[e.id];
+        if (p) el.setAttribute('transform', `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
+      }
+    });
+    for (const el of Array.from(g.children)) if (!seen.has(el.id.slice(2))) el.remove();
+    const z = ball.z || 0;
+    document.getElementById('lv-ball').setAttribute('transform', `translate(${ball.x.toFixed(2)} ${(ball.y - z * 0.45).toFixed(2)}) scale(${(1 + z * 0.07).toFixed(3)})`);
+    document.getElementById('lv-shadow').setAttribute('transform', `translate(${(ball.x + z * 0.12).toFixed(2)} ${(ball.y + 0.5).toFixed(2)})`);
+    const lbl = document.getElementById('lv-name');
+    const hp = holder && (pos[holder] || L.world.pos[holder]);
+    if (hp && S.players[holder]) { lbl.textContent = shortName(S.players[holder].name); lbl.setAttribute('transform', `translate(${hp.x.toFixed(2)} ${(hp.y - 2.6).toFixed(2)})`); lbl.style.opacity = 1; }
+    else lbl.style.opacity = 0;
+  }
+  function caption(text) {
+    const el = document.getElementById('lv-cap');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+  function trail(a, b) {
+    const el = document.getElementById('lv-trail');
+    if (!el) return;
+    el.setAttribute('x1', a.x); el.setAttribute('y1', a.y); el.setAttribute('x2', b.x); el.setAttribute('y2', b.y);
+    el.classList.remove('show');
+    void el.getBoundingClientRect();
+    el.classList.add('show');
+  }
+
   function startLive(instant) {
     const f = FM.userFixture(S);
     const us = f.h === S.userClub ? 0 : 1;
@@ -744,66 +1058,48 @@
     const m = FM.createMatch(S, f.h, f.a, S.tactics[f.h], S.tactics[f.a], { userSide: us, ai: instant ? [true, true] : [us !== 0, us !== 1] });
     UI.modal = null;
     if (instant) { FM.simulate(S, m); finishRound(m); return; }
-    UI.match = { m, us, speed: 1, paused: false, out: null, inn: null, shown: 0, flash: false, panel: 'tac' };
+    const L = { m, us, speed: 1, paused: false, out: null, inn: null, shown: 0, panel: 'tac', queue: [], kits: kits(FM.club(S, f.h), FM.club(S, f.a)), world: { pos: {}, ball: { x: PW / 2, y: PH / 2 }, carrier: null, beat: null } };
+    const ko = kickoffBeat(m, 0);
+    const t0 = shapeTargets(m, ko.ball, 0);
+    for (const [k, sd] of m.sides.entries()) for (const e of sd.on) { const t = toTeam(k, t0[e.id].x, t0[e.id].y); L.world.pos[e.id] = toPitch(k, Math.min(t.d, 46), t.w); }
+    if (ko.holder) { L.world.pos[ko.holder] = { x: PW / 2 + 0.9, y: PH / 2 }; L.world.carrier = ko.holder; }
+    UI.match = L;
     UI.view = 'match';
     render();
-    tick();
   }
-  function tick() {
-    const L = UI.match;
-    if (!L) return;
-    clearTimeout(L.timer);
-    if (L.paused || L.m.finished) return;
-    const goalsBefore = L.m.sides[0].goals + L.m.sides[1].goals;
-    FM.stepMinute(S, L.m);
-    const scored = L.m.sides[0].goals + L.m.sides[1].goals > goalsBefore;
-    if (L.m.minute === 45) { L.paused = true; L.note = 'استراحة ما بين الشوطين: راجع الخطة والتبديلات ثم استأنف'; }
-    updateLive(scored);
-    if (L.m.finished) { renderMatchControls(); return; }
-    const delay = [0, 650, 320, 120][L.speed] + (scored ? 1300 : 0);
-    L.timer = setTimeout(tick, delay);
+  // ملعب بأبعاد حقيقية: خط المرمى عند 0 و105 م، المنطقة 16.5 م، نقطة الجزاء 11 م، الدائرة 9.15 م
+  function livePitch() {
+    const L = (x1, y1, x2, y2) => `<line class="pl" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    let g = `<rect class="grass" x="0" y="0" width="${PW}" height="${PH}"/>`;
+    for (let i = 0; i < 12; i += 2) g += `<rect class="stripe" x="${(PW / 12) * i}" y="0" width="${PW / 12}" height="${PH}"/>`;
+    g += `<rect class="pl" x="0" y="0" width="${PW}" height="${PH}"/>` + L(PW / 2, 0, PW / 2, PH) + `<circle class="pl" cx="${PW / 2}" cy="${PH / 2}" r="9.15"/><circle cx="${PW / 2}" cy="${PH / 2}" r="0.35" class="spot"/>`;
+    const bx = 20.16, sx = 9.16, dy = Math.sqrt(9.15 * 9.15 - 5.5 * 5.5);
+    g += `<rect class="pl" x="0" y="${PH / 2 - bx}" width="16.5" height="${bx * 2}"/><rect class="pl" x="0" y="${PH / 2 - sx}" width="5.5" height="${sx * 2}"/>`;
+    g += `<rect class="pl" x="${PW - 16.5}" y="${PH / 2 - bx}" width="16.5" height="${bx * 2}"/><rect class="pl" x="${PW - 5.5}" y="${PH / 2 - sx}" width="5.5" height="${sx * 2}"/>`;
+    g += `<circle cx="11" cy="${PH / 2}" r="0.3" class="spot"/><circle cx="${PW - 11}" cy="${PH / 2}" r="0.3" class="spot"/>`;
+    g += `<path class="pl" d="M16.5 ${PH / 2 - dy} A9.15 9.15 0 0 1 16.5 ${PH / 2 + dy}"/><path class="pl" d="M${PW - 16.5} ${PH / 2 - dy} A9.15 9.15 0 0 0 ${PW - 16.5} ${PH / 2 + dy}"/>`;
+    g += `<path class="pl" d="M0 1 A1 1 0 0 0 1 0 M${PW - 1} 0 A1 1 0 0 0 ${PW} 1 M0 ${PH - 1} A1 1 0 0 1 1 ${PH} M${PW - 1} ${PH} A1 1 0 0 1 ${PW} ${PH - 1}"/>`;
+    return g;
   }
-  function dotPositions(m) {
-    // الإحداثيات بالأمتار على ملعب أفقي 105×68
-    const last = m.tl[m.tl.length - 1];
-    const bx = last ? last.x : 50;
-    const out = [];
-    m.sides.forEach((sd, k) => {
-      const slots = FM.FORMATIONS[sd.tactic.formation];
-      const poss = last && last.s === k;
-      for (const e of sd.on) {
-        const sl = slots[e.slot] || slots[0];
-        let depth = sl[1];
-        if (e.role !== 'GK') depth += (k === 0 ? bx - 50 : 50 - bx) * 0.35 + (poss ? 7 : -4) + (sd.tactic.line - 1) * 5;
-        depth = Math.max(3, Math.min(e.role === 'GK' ? 12 : 92, depth));
-        // صاحب الأرض يدافع عن المرمى الأيمن ويهاجم نحو اليسار، مثل مكانه في لوحة النتيجة
-        const x = k === 0 ? 100 - depth : depth;
-        const y = k === 0 ? 100 - sl[2] : sl[2];
-        out.push({ id: e.id, k, x: (x / 100) * 101 + 2, y: (y / 100) * 62 + 3 });
-      }
-    });
-    return { dots: out, ball: last ? { x: ((100 - last.x) / 100) * 101 + 2, y: ((100 - last.y) / 100) * 62 + 3 } : { x: 52.5, y: 34 } };
+  function goalNets() {
+    const y = PH / 2 - GOAL_HALF;
+    return `<rect class="net" x="-2.2" y="${y}" width="2.2" height="${GOAL_HALF * 2}"/><rect class="net" x="${PW}" y="${y}" width="2.2" height="${GOAL_HALF * 2}"/>`;
   }
   function matchView() {
     const L = UI.match;
     const m = L.m;
     const h = FM.club(S, m.sides[0].clubId), a = FM.club(S, m.sides[1].clubId);
-    const pos0 = dotPositions(m);
-    let dots = '';
-    for (const d of pos0.dots) {
-      const c = d.k === 0 ? h : a;
-      const p = S.players[d.id];
-      dots += `<g class="dot" id="d-${d.id}" style="transform:translate(${d.x}px,${d.y}px)"><circle r="2" fill="${c.color}" stroke="${c.color2}" stroke-width="0.4"/><text fill="${c.color2}" y="0.1">${p ? Math.min(99, Math.round(p.ovr)) : ''}</text></g>`;
-    }
+    const lg = FM.clubLeague(S, h.id);
     return `<div class="stack">
       <div class="scoreboard">
         <div class="tm">${crest(h, 40)}<span class="nm">${esc(h.name)}</span></div>
         <div class="sc"><div class="g" id="lv-score">${pair(m.sides[0].goals, m.sides[1].goals)}</div><div class="clock" id="lv-clock">${m.minute}'</div></div>
         <div class="tm away">${crest(a, 40)}<span class="nm">${esc(a.name)}</span></div>
       </div>
+      <div class="muted" style="text-align:center;font-size:.8rem;margin-top:-6px">${esc(lg.name)} · الجولة ${num(S.week + 1)} · ${esc(h.stadium)} · ${fdate(FM.fixtureDate(S), true)}</div>
       <div class="live-grid">
         <div class="stack">
-          <div class="panel" style="padding:10px"><div class="pitch-wrap"><svg class="pitch" viewBox="0 0 105 68" role="img" aria-label="الملعب المباشر" style="direction:ltr">${pitchLines(105, 68, false)}<g id="lv-dots">${dots}</g><g class="ball" id="lv-ball" style="transform:translate(${pos0.ball.x}px,${pos0.ball.y}px)"><circle r="1.1" fill="#fff" stroke="#000" stroke-width="0.25"/></g></svg><div id="lv-flash"></div></div>
+          <div class="panel" style="padding:10px"><div class="pitch-wrap"><svg class="pitch live" viewBox="-3 -2.5 111 73" role="img" aria-label="الملعب المباشر" style="direction:ltr"><rect x="-3" y="-2.5" width="111" height="73" class="apron"/>${livePitch()}${goalNets()}<line id="lv-trail" class="trail" x1="0" y1="0" x2="0" y2="0"/><g id="lv-dots"></g><ellipse id="lv-shadow" class="bshadow" rx="0.75" ry="0.38"/><g id="lv-ball"><circle r="0.75" class="ballc"/></g><text id="lv-name" class="pname"></text></svg><div id="lv-cap" class="cap"></div><div id="lv-flash"></div></div>
             <div class="row sp" style="margin-top:8px;font-size:.8rem"><span class="muted">${esc(h.short)} ◂ يهاجم نحو اليسار</span><span class="muted">الزخم</span><span class="muted">${esc(a.short)}</span></div>
             <div class="mom" id="lv-mom"></div>
           </div>
@@ -816,45 +1112,30 @@
       </div>
     </div>`;
   }
-  function updateLive(scored) {
+  function updateHud(scored) {
     const L = UI.match;
     if (!L || UI.view !== 'match') return;
     const m = L.m;
     const sc = document.getElementById('lv-score');
     if (!sc) return;
     sc.innerHTML = pair(m.sides[0].goals, m.sides[1].goals);
-    document.getElementById('lv-clock').textContent = m.finished ? 'نهاية المباراة' : `${m.minute > 90 ? '90+' + (m.minute - 90) : m.minute}'${m.minute <= 45 ? ' · الشوط 1' : ' · الشوط 2'}`;
-    const P = dotPositions(m);
-    const g = document.getElementById('lv-dots');
-    const present = new Set(P.dots.map((d) => d.id));
-    for (const el of Array.from(g.children)) if (!present.has(el.id.slice(2))) el.remove();
-    for (const d of P.dots) {
-      let el = document.getElementById('d-' + d.id);
-      if (!el) {
-        const c = FM.club(S, m.sides[d.k].clubId);
-        const p = S.players[d.id];
-        g.insertAdjacentHTML('beforeend', `<g class="dot" id="d-${d.id}" style="transform:translate(${d.x}px,${d.y}px)"><circle r="2" fill="${c.color}" stroke="${c.color2}" stroke-width="0.4"/><text fill="${c.color2}" y="0.1">${p ? Math.round(p.ovr) : ''}</text></g>`);
-        el = document.getElementById('d-' + d.id);
-      }
-      el.style.transform = `translate(${d.x}px,${d.y}px)`;
-    }
-    document.getElementById('lv-ball').style.transform = `translate(${P.ball.x}px,${P.ball.y}px)`;
+    if (m.finished) document.getElementById('lv-clock').textContent = 'نهاية المباراة';
     const mom = Math.max(-20, Math.min(20, m.mom)) / 20;
-    document.getElementById('lv-mom').innerHTML = mom >= 0 ? `<span style="left:50%;width:${mom * 50}%;background:${FM.club(S, m.sides[0].clubId).color}"></span>` : `<span style="right:50%;width:${-mom * 50}%;background:${FM.club(S, m.sides[1].clubId).color}"></span>`;
+    document.getElementById('lv-mom').innerHTML = mom >= 0 ? `<span style="left:50%;width:${mom * 50}%;background:${L.kits[0].fill}"></span>` : `<span style="right:50%;width:${-mom * 50}%;background:${L.kits[1].fill}"></span>`;
     if (scored) {
       const fl = document.getElementById('lv-flash');
       fl.innerHTML = '<div class="goal-flash">هدف!</div>';
-      setTimeout(() => { if (fl) fl.innerHTML = ''; }, 1500);
+      setTimeout(() => { if (fl) fl.innerHTML = ''; }, 1600);
     }
     const [A, B] = m.sides;
     const mins = Math.max(1, m.minute);
-    const rows = [['الاستحواذ', Math.round((A.poss / mins) * 100) + '%', Math.round((B.poss / mins) * 100) + '%'], ['التسديدات', A.shots, B.shots], ['على المرمى', A.onT, B.onT], ['xG', A.xg.toFixed(2), B.xg.toFixed(2)], ['الركنيات', A.corners, B.corners], ['البطاقات', `${A.yel}/${A.red}`, `${B.yel}/${B.red}`], ['التبديلات', `${A.subs}/5`, `${B.subs}/5`]];
+    const rows = [['الاستحواذ', Math.round((A.poss / mins) * 100) + '%', Math.round((B.poss / mins) * 100) + '%'], ['التسديدات', A.shots, B.shots], ['على المرمى', A.onT, B.onT], ['xG', A.xg.toFixed(2), B.xg.toFixed(2)], ['الركنيات', A.corners, B.corners], ['الأخطاء', A.fouls, B.fouls], ['البطاقات', `${A.yel}/${A.red}`, `${B.yel}/${B.red}`], ['التبديلات', `${A.subs}/5`, `${B.subs}/5`]];
     document.getElementById('lv-stats').innerHTML = `<h3>الإحصاءات</h3>${rows.map(([l, x, y]) => `<div class="stat-row"><span class="num">${x}</span><span class="lbl">${l}</span><span class="num">${y}</span></div>`).join('')}`;
     if (m.events.length !== L.shown) {
       L.shown = m.events.length;
       document.getElementById('lv-feed').innerHTML = m.events.slice().reverse().map((e) => `<div class="e ${e.type}"><span class="m">${e.min}'</span><span>${esc(e.text)}</span></div>`).join('');
     }
-    if (m.minute === 45 || m.finished || scored || L.dirty) { L.dirty = false; renderMatchControls(); }
+    if (m.finished || scored) renderMatchControls();
   }
   function renderMatchControls() {
     const L = UI.match;
@@ -900,13 +1181,13 @@
     const E = S.seasonEnd;
     const youth = (E.youth || []).map((id) => S.players[id]).filter(Boolean);
     return `<div class="overlay"><div class="modal" role="dialog" aria-modal="true" aria-label="نهاية الموسم">
-      <div class="mh"><h2>${S.gameOver ? 'نهاية المسيرة' : 'نهاية الموسم'}</h2></div>
+      <div class="mh"><h2>${S.gameOver ? 'نهاية المسيرة' : 'نهاية موسم ' + esc(E.label || '')}</h2></div>
       <div class="mb">
         <div class="grid g3"><div><div class="eyebrow">مركزنا</div><div class="big">${E.pos}</div><div class="muted">الهدف كان ${E.target}</div></div><div><div class="eyebrow">البطل</div><h3>${esc(E.champ)}</h3></div><div><div class="eyebrow">جائزة المركز</div><div class="big" style="font-size:1.5rem">${$m(E.prize)}</div></div></div>
         <div class="pill ${E.pos <= E.target ? 'good' : 'bad'}" style="justify-self:start;white-space:normal">${esc(E.verdict)}</div>
-        <dl class="kv"><dt>هدّاف الدوري</dt><dd>${E.scorer ? `${esc(E.scorer.name)} (${esc(E.scorer.club)}) · ${num(E.scorer.goals)} هدفًا` : '—'}</dd><dt>أفضل لاعب</dt><dd>${E.best ? `${esc(E.best.name)} · ${num(E.best.avg)}` : '—'}</dd>${E.retired && E.retired.length ? `<dt>اعتزلوا</dt><dd>${esc(E.retired.join('، '))}</dd>` : ''}${E.left && E.left.length ? `<dt>غادروا بنهاية العقد</dt><dd>${esc(E.left.join('، '))}</dd>` : ''}</dl>
+        <dl class="kv">${(E.others || []).map((o) => `<dt>بطل ${esc(o.league)}</dt><dd>${esc(o.champ)}</dd>`).join('')}<dt>هدّاف الدوري</dt><dd>${E.scorer ? `${esc(E.scorer.name)} (${esc(E.scorer.club)}) · ${num(E.scorer.goals)} هدفًا` : '—'}</dd><dt>أفضل لاعب</dt><dd>${E.best ? `${esc(E.best.name)} · ${num(E.best.avg)}` : '—'}</dd>${E.retired && E.retired.length ? `<dt>اعتزلوا</dt><dd>${esc(E.retired.join('، '))}</dd>` : ''}${E.left && E.left.length ? `<dt>غادروا بنهاية العقد</dt><dd>${esc(E.left.join('، '))}</dd>` : ''}</dl>
         ${youth.length ? `<div class="stack"><h3>دفعة أكاديمية الشباب</h3>${youth.map((p) => `<div class="row sp" data-a="player" data-id="${p.id}" style="cursor:pointer"><span>${pos(p.pos)} ${esc(p.name)} <span class="muted">${p.age} سنة</span></span><span class="row">${ovr(p.ovr)}${potStars(p)}</span></div>`).join('')}</div>` : ''}
-        <div class="row" style="justify-content:flex-end">${S.gameOver ? '<button class="btn pri" data-a="newCareer">مسيرة جديدة</button>' : `<button class="btn pri" data-a="seasonGo">ابدأ الموسم ${S.season}</button>`}</div>
+        <div class="row" style="justify-content:flex-end">${S.gameOver ? '<button class="btn pri" data-a="newCareer">مسيرة جديدة</button>' : `<button class="btn pri" data-a="seasonGo">ابدأ موسم ${S.year}/${S.year + 1}</button>`}</div>
       </div></div></div>`;
   }
 
@@ -942,7 +1223,15 @@
     }
     if (UI.toast) html += `<div class="toast ${UI.toast.bad ? 'bad' : ''}" role="status">${esc(UI.toast.text)}</div>`;
     app.innerHTML = html;
-    if (UI.view === 'match' && UI.match) { UI.match.shown = -1; updateLive(false); renderMatchControls(); }
+    if (UI.view === 'match' && UI.match) {
+      const L = UI.match;
+      L.shown = -1;
+      updateHud(false);
+      renderMatchControls();
+      cancelAnimationFrame(L.raf);
+      draw(L, {}, Object.assign({ z: 0 }, L.world.ball), L.world.carrier);
+      L.raf = requestAnimationFrame(frame);
+    }
     if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { el.setSelectionRange(caret, caret); } catch { /* حقل رقمي */ } } }
   }
 
@@ -950,10 +1239,11 @@
   const A = {
     nav: (d) => { UI.view = d.v; UI.sel = null; UI.modal = null; render(); window.scrollTo(0, 0); },
     tab: (d) => { UI.tab[d.k] = d.v; render(); },
-    pickClub: (d) => { UI.start.club = +d.i; render(); },
-    newGame: () => {
+    pickClub: (d) => { UI.start.club = d.v; render(); },
+    pickLeague: (d) => { UI.start.league = d.v; UI.start.club = null; render(); },
+    newGame: (d) => {
       const nm = (document.getElementById('mgr') || {}).value || UI.start.name || 'المدرب';
-      S = FM.newGame(UI.start.club, nm.trim() || 'المدرب');
+      S = FM.newGame(d.v, nm.trim() || 'المدرب');
       UI.view = 'home';
       save();
       render();
@@ -1037,7 +1327,8 @@
     tfocus: (d) => { S.training.focus = d.v; save(); render(); },
     tint: (d) => { S.training.intensity = +d.v; save(); render(); },
     upgrade: (d) => { const err = FM.upgradeFacility(S, d.k); if (err) toast(err, true); else { save(); toast('تم التطوير'); } },
-    round: (d) => { UI.round = Math.max(0, Math.min(S.fixtures.length - 1, +d.v)); render(); },
+    round: (d) => { UI.roundLeague = d.l; UI.round = Math.max(0, Math.min(FM.leagueOf(S, d.l).fixtures.length - 1, +d.v)); render(); },
+    leagueTab: (d) => { UI.leagueTab = d.v; UI.round = null; render(); },
     // التحليل
     runLab: () => {
       const f = FM.userFixture(S);
@@ -1063,15 +1354,15 @@
       save(); toast(`طُبّقت خطة ${p.name} · ${d.f}`);
     },
     // المباراة
-    mPause: () => { const L = UI.match; L.paused = !L.paused; if (!L.paused) { L.note = null; tick(); } renderMatchControls(); },
+    mPause: () => { const L = UI.match; L.paused = !L.paused; if (!L.paused) L.note = null; renderMatchControls(); },
     mSpeed: (d) => { UI.match.speed = +d.v; renderMatchControls(); },
     mPanel: (d) => { UI.match.panel = d.v; renderMatchControls(); },
-    mTac: (d) => { const L = UI.match; L.m.sides[L.us].tactic[d.k] = +d.v; FM.refresh(S, L.m); L.m.events.push({ min: L.m.minute, type: 'tactic', side: L.us, text: `${L.m.names[L.us]}: ${FM.TACTIC_AR[d.k]} ← ${FM.TACTIC_KEYS[d.k][+d.v]}` }); updateLive(false); renderMatchControls(); },
+    mTac: (d) => { const L = UI.match; L.m.sides[L.us].tactic[d.k] = +d.v; FM.refresh(S, L.m); L.m.events.push({ min: L.m.minute, type: 'tactic', side: L.us, text: `${L.m.names[L.us]}: ${FM.TACTIC_AR[d.k]} ← ${FM.TACTIC_KEYS[d.k][+d.v]}` }); updateHud(false); renderMatchControls(); },
     mOut: (d) => { UI.match.out = d.id; renderMatchControls(); },
     mIn: (d) => { UI.match.inn = d.id; renderMatchControls(); },
     mSub: () => { const L = UI.match; const err = FM.substitute(S, L.m, L.us, L.out, L.inn); if (err) toast(err, true); L.out = null; L.inn = null; render(); },
-    mSkip: () => { const L = UI.match; clearTimeout(L.timer); L.m.ai[L.us] = true; FM.simulate(S, L.m); L.paused = false; updateLive(false); renderMatchControls(); },
-    mFinish: () => { finishRound(UI.match.m); },
+    mSkip: () => { const L = UI.match; L.queue = []; L.world.beat = null; L.m.ai[L.us] = true; FM.simulate(S, L.m); L.paused = false; updateHud(false); renderMatchControls(); },
+    mFinish: () => { cancelAnimationFrame(UI.match.raf); finishRound(UI.match.m); },
     seasonGo: () => { S.seasonEnd = null; UI.modal = null; UI.view = 'home'; save(); render(); },
     newCareer: () => { clearSave(); S = null; UI.modal = null; UI.view = 'start'; render(); },
   };
