@@ -145,7 +145,20 @@
     first: ['جاك', 'هاري', 'تشارلي', 'أوليفر', 'جورج', 'ألفي', 'ريس', 'كالوم', 'لويس', 'ماسون', 'توم', 'جوش', 'إيثان', 'رايان', 'دانيال', 'سام', 'ليام', 'ناثان', 'كونور', 'آرتشي'],
     last: ['سميث', 'جونز', 'ويليامز', 'براون', 'تايلور', 'ديفيز', 'إيفانز', 'توماس', 'جونسون', 'روبرتس', 'ووكر', 'رايت', 'طومسون', 'وايت', 'هيوز', 'إدواردز', 'غرين', 'هول', 'وود', 'هاريس', 'مارتن', 'كوك', 'كلارك', 'بيكر'],
   };
-  const NAME_SET = { dz: 'maghreb', ma: 'maghreb', tn: 'maghreb', eg: 'eg', wa: 'wa', sa: 'sa', ee: 'ee', en: 'en' };
+  NAMES.es = {
+    first: ['أليخاندرو', 'بابلو', 'خافيير', 'سيرجيو', 'دانيال', 'آدريان', 'ماريو', 'هوغو', 'ألفارو', 'دافيد', 'راؤول', 'إيكر', 'أوناي', 'خورخي', 'ميغيل', 'إيفان'],
+    last: ['غارسيا', 'مارتينيز', 'لوبيز', 'سانشيز', 'بيريز', 'غوميز', 'فرنانديز', 'رودريغيز', 'مورينو', 'خيمينيز', 'رويث', 'ألونسو', 'نافارو', 'توريس', 'دومينغيز', 'رامون'],
+  };
+  const NAME_SET = { dz: 'maghreb', ma: 'maghreb', tn: 'maghreb', eg: 'eg', wa: 'wa', sa: 'sa', ee: 'ee', en: 'en', es: 'es' };
+  // منطقة الأسماء المولّدة حسب دوري النادي أو بلده
+  function regionFor(c) {
+    if (c.league === 'pl') return 'en';
+    if (c.league === 'es') return 'es';
+    if (c.league === 'dz' || c.id === 'nt-alg') return 'dz';
+    if (c.league === 'ma' || c.league === 'tn') return c.league;
+    if (c.country === 'مصر') return 'eg';
+    return 'wa';
+  }
   // الحد الأدنى من كل مركز في التشكيلة
   const NEED = { GK: 3, CB: 4, LB: 2, RB: 2, DM: 2, CM: 3, AM: 2, LW: 2, RW: 2, ST: 3 };
   const MAX_SQUAD = 32;
@@ -218,9 +231,10 @@
     if (reg && reg.boost) for (const k of reg.boost) if (k !== 'gk') a[k] = clamp(a[k] + ri(1, 5), 15, 97);
     let name = opt.name;
     if (!name) {
-      const used = new Set(Object.values(S.players).map((q) => q.name));
+      const used = S._names || new Set(Object.values(S.players).map((q) => q.name));
       for (let k = 0; k < 6 && (!name || used.has(name)); k++) name = nameFor(region);
     }
+    if (S._names) S._names.add(name);
     const p = { id: 'p' + S.nextId++, name, real: !!opt.real, gen: false, num: 0, region, age, pos, alt: [], a, clubId: opt.clubId === undefined ? null : opt.clubId };
     // نصحح القيم حتى يقترب التقييم من الهدف
     for (let it = 0; it < 3; it++) {
@@ -270,7 +284,15 @@
   // ذهاب وإياب بطريقة الدائرة؛ إن أُعطيت الجولة الأولى الحقيقية تُبنى بقية الجولات حولها
   function genFixtures(ids, md1) {
     const n = ids.length;
-    const arr = md1 ? md1.map((p) => p[0]).concat(md1.map((p) => p[1]).reverse()) : shuffle(ids.slice());
+    // الجولة الأولى الحقيقية (كاملة أو جزئية) ثم تُكمَّل بقية الأزواج
+    let pairs = null;
+    if (md1) {
+      const used = new Set(md1.flat());
+      const rest = shuffle(ids.filter((id) => !used.has(id)));
+      pairs = md1.slice();
+      for (let i = 0; i + 1 < rest.length; i += 2) pairs.push([rest[i], rest[i + 1]]);
+    }
+    const arr = pairs ? pairs.map((p) => p[0]).concat(pairs.map((p) => p[1]).reverse()) : shuffle(ids.slice());
     const rounds = [];
     for (let r = 0; r < n - 1; r++) {
       const ms = [];
@@ -289,7 +311,7 @@
     const pr = PRESETS[c.style];
     return { formation: c.formation, preset: c.style, school: CLUB_SCHOOL[c.id] || STYLE_SCHOOL[c.style] || null, mentality: pr.mentality, pressing: pr.pressing, tempo: pr.tempo, width: pr.width, line: pr.line, passing: pr.passing, lineup: [], bench: [] };
   }
-  const levelFromRep = (lg, rep) => (lg === 'dz' ? 43 + rep * 0.33 : 36 + rep * 0.5);
+  const levelFromRep = (lg, rep) => ({ dz: 43 + rep * 0.33, ma: 44 + rep * 0.33, tn: 43 + rep * 0.33, afr: 44 + rep * 0.33, nt: 40 + rep * 0.5 }[lg] || 36 + rep * 0.5);
   function clubLevel(S, clubId) {
     return Math.round(avg(squadOf(S, clubId).map((p) => p.ovr).sort((a, b) => b - a).slice(0, 14)));
   }
@@ -305,7 +327,7 @@
   function fillSquad(S, c, lvl) {
     const sq = squadOf(S, c.id);
     const backup = sq.filter((p) => !p.gen).length >= 14;
-    const region = c.league === 'dz' ? 'dz' : 'en';
+    const region = regionFor(c);
     for (const pos in NEED) {
       let have = sq.filter((p) => p.pos === pos).length;
       while (have < NEED[pos]) {
@@ -313,7 +335,7 @@
         const target = Math.round(backup ? lvl - 9 + gauss() * 3 : lvl - 1 + gauss() * 3);
         const p = genPlayer(S, { pos, age, target: clamp(target, 40, 86), region, clubId: c.id, potBoost: backup ? 6 : 0 });
         p.gen = true;
-        assignNumber(S, p);
+        if (!S._names) assignNumber(S, p);
         have++;
       }
     }
@@ -323,17 +345,22 @@
     if (seed !== undefined) setSeed(seed);
     const D = root.FM_DATA;
     const S = {
-      v: 2, manager: managerName || 'المدرب', season: 1, year: 2026, week: 0, nextId: 1,
+      _names: new Set(), v: 2, manager: managerName || 'المدرب', season: 1, year: 2026, week: 0, nextId: 1,
       leagues: [], clubs: [], players: {}, inbox: [], scouts: [], reports: [], shortlist: [], listed: [], offers: [], news: [],
       tactics: {}, fam: {}, facilities: { training: 1, youth: 1, scouting: 1 },
       training: { focus: 'balanced', intensity: 1 }, devLog: [], finance: { log: [], week: null },
       board: { conf: 60, target: 6 }, lastReport: null, history: [], formLine: [], gameOver: false, msgId: 1,
     };
-    for (const L of D.LEAGUES) {
-      const lg = { id: L.id, name: L.name, short: L.short, country: L.country, relegate: L.relegate, europe: L.europe, sim: L.sim, econ: L.econ, start: L.start, end: L.end, clubs: [], fixtures: [], dates: [], played: 0 };
+    const dzL = D.LEAGUES.find((l) => l.id === 'dz');
+    const pseudo = [
+      { id: 'afr', name: 'أندية أفريقية', short: 'أفريقيا', hidden: true, relegate: 0, europe: 0, sim: { goal: 0.85, home: 1.2 }, econ: D.LEAGUES.find((l) => l.id === 'ma').econ, clubs: D.AFRICA.map((c) => Object.assign({ budget: Math.round(c.rep * c.rep * 600 / 10000) * 10000, sq: '' }, c)) },
+      { id: 'nt', name: 'المنتخبات', short: 'المنتخبات', hidden: true, relegate: 0, europe: 0, sim: { goal: 0.85, home: 1.2 }, econ: dzL.econ, clubs: D.NATIONAL.map((c) => Object.assign({ budget: 0 }, c)) },
+    ];
+    for (const L of D.LEAGUES.concat(pseudo)) {
+      const lg = { id: L.id, name: L.name, short: L.short, country: L.country, relegate: L.relegate, europe: L.europe, sim: L.sim, econ: L.econ, start: L.start, end: L.end, clubs: [], fixtures: [], dates: [], played: 0, hidden: !!L.hidden };
       S.leagues.push(lg);
       for (const c of L.clubs) {
-        const cl = { id: c.k, league: L.id, name: c.name, short: c.short, stadium: c.stadium, capacity: c.cap, color: c.c1, color2: c.c2, rep: c.rep, budget: c.budget, style: c.style, formation: c.form };
+        const cl = { id: c.k, league: L.id, country: c.country, name: c.name, short: c.short, stadium: c.stadium, capacity: c.cap, color: c.c1, color2: c.c2, rep: c.rep, budget: c.budget, style: c.style, formation: c.form };
         S.clubs.push(cl);
         lg.clubs.push(cl.id);
         S.fam[cl.id] = {};
@@ -341,17 +368,25 @@
         for (const line of (c.sq || '').split('\n')) {
           const parts = line.trim().split('|');
           if (parts.length < 4) continue;
-          genPlayer(S, { name: parts[0], pos: parts[1], age: +parts[2], target: +parts[3], region: L.id === 'dz' ? 'dz' : 'en', clubId: cl.id, real: true, know: 55 });
+          genPlayer(S, { name: parts[0], pos: parts[1], age: +parts[2], target: +parts[3], region: regionFor(cl), clubId: cl.id, real: true, know: 55 });
         }
         const lvl = squadOf(S, cl.id).length >= 14 ? clubLevel(S, cl.id) : Math.round(levelFromRep(L.id, cl.rep));
         fillSquad(S, cl, lvl);
         cl.level = clubLevel(S, cl.id);
         const sq = squadOf(S, cl.id);
         sq.forEach((p) => { p.num = 0; });
-        sq.sort((a, b) => (a.gen - b.gen) || b.ovr - a.ovr).forEach((p) => assignNumber(S, p));
+        const taken = new Set();
+        for (const p of sq.sort((a, b) => (a.gen - b.gen) || b.ovr - a.ovr)) {
+          let n = NUMS[p.pos].find((x) => !taken.has(x));
+          for (let x = 41; !n && x < 99; x++) if (!taken.has(x)) n = x;
+          p.num = n || 99;
+          taken.add(p.num);
+        }
       }
-      lg.fixtures = genFixtures(lg.clubs, L.md1);
-      lg.dates = roundDates(L.start, L.end, lg.fixtures.length);
+      if (!L.hidden) {
+        lg.fixtures = genFixtures(lg.clubs, L.md1);
+        lg.dates = roundDates(L.start, L.end, lg.fixtures.length);
+      }
     }
     for (let i = 0; i < 30; i++) {
       const dz = i % 2 === 0;
@@ -360,11 +395,16 @@
     }
     const user = club(S, clubKey) || S.clubs[0];
     S.userClub = user.id;
+    S.mgr = { rep: Math.round(user.rep * 0.85), clubs: [] };
+    S.talks = []; S.papers = []; S.trophies = []; S.v = 3;
     S.board.target = targetPosition(S, user.id);
     S.clubs.forEach((c) => { S.tactics[c.id] = defaultTactic(c); autoPick(S, c.id, S.tactics[c.id]); });
     squadOf(S, user.id).forEach((p) => { p.know = 80; });
+    buildCups(S);
+    buildNT(S);
+    delete S._names;
     const lg = userLeague(S);
-    sendMsg(S, 'رسالة من مجلس الإدارة', `مرحبًا ${S.manager}. يتوقع المجلس أن ينهي ${user.name} موسم ${D.season} في ${targetText(S)}. ميزانية الانتقالات: ${money(user.budget)}. أمامك ${lg.fixtures.length} جولة في ${lg.name}، أولاها يوم ${lg.dates[0]}.`, 'board');
+    sendMsg(S, 'رسالة من مجلس الإدارة', `مرحبًا ${S.manager}. يتوقع المجلس أن ينهي ${user.name} موسم ${D.season} في ${targetText(S)}. ميزانية الانتقالات: ${money(user.budget)}. أمامك ${lg.fixtures.length} جولة في ${lg.name}، أولاها يوم ${arDate(lg.dates[0])}.`, 'board');
     sendMsg(S, 'من المحلل', 'افتح «التحليل» قبل كل مباراة: تقرير الخصم ومختبر يحاكي المباراة مئات المرات لتجربة خطتك قبل اللعب.', 'tip');
     return S;
   }
@@ -1115,14 +1155,10 @@
   function playRound(S, userMatch) {
     const ul = userLeague(S);
     const date = ul.dates[S.week];
-    for (const lg of S.leagues) if (lg !== ul) while (lg.played < lg.fixtures.length && lg.dates[lg.played] <= date) playLeagueRound(S, lg, null);
+    for (const lg of S.leagues) if (lg !== ul && !lg.hidden) while (lg.played < lg.fixtures.length && lg.dates[lg.played] <= date) playLeagueRound(S, lg, null);
     playLeagueRound(S, ul, userMatch);
     weekly(S);
     S.week = ul.played;
-    if (S.week >= ul.fixtures.length) {
-      for (const lg of S.leagues) while (lg.played < lg.fixtures.length) playLeagueRound(S, lg, null);
-      endSeason(S);
-    }
   }
 
   function prepareAI(S, clubId, oppId) {
@@ -1180,6 +1216,7 @@
     const r = Math.sign(gf - ga);
     S.board.conf = clamp(Math.round(S.board.conf + r * 3 - expect * 1.5 + (r < 0 && opp.rep > me.rep ? 1.5 : 0)), 0, 100);
     S.formLine.push({ week: S.week, gf, ga, pos: 0 });
+    checkPromises(S, m, u);
     const ut = m.sides[u].tactic;
     S.lastUserTactic = { formation: ut.formation, school: ut.school || null, mentality: ut.mentality, pressing: ut.pressing, tempo: ut.tempo, width: ut.width, line: ut.line, passing: ut.passing };
     const ratings = Object.keys(m.sides[u].mins);
@@ -1247,6 +1284,12 @@
       if (stars.length) makeAIOffer(S, pick(stars), 1.2 + rand() * 0.4);
     }
     if (rand() < 0.4) aiTransfer(S);
+    genTalks(S);
+    if (S.board.conf <= 6 && S.week >= 8 && !S.unemployed) {
+      S.unemployed = true;
+      sendMsg(S, 'إقالة', `قرر مجلس إدارة ${me.name} إنهاء مهمتك بعد تراجع النتائج. ابحث عن تحدٍّ جديد.`, 'board');
+      jobOffers(S, 'sacked');
+    }
     if (S.week === ul.fixtures.length - 6) {
       const ending = squadOf(S, user).filter((p) => p.contract <= 1);
       if (ending.length) sendMsg(S, 'عقود تنتهي', `عقود هؤلاء تنتهي هذا الموسم: ${ending.map((p) => p.name).join('، ')}. جددها من بطاقة اللاعب أو سيرحلون مجانًا.`, 'contract');
@@ -1361,7 +1404,7 @@
   }
 
   function makeAIOffer(S, p, mult) {
-    const buyers = S.clubs.filter((c) => c.id !== S.userClub && c.budget > p.value * mult && c.level + 5 >= p.ovr);
+    const buyers = S.clubs.filter((c) => c.id !== S.userClub && c.league !== 'nt' && c.budget > p.value * mult && c.level + 5 >= p.ovr);
     if (!buyers.length) return;
     const b = pick(buyers);
     if (S.offers.find((o) => o.pid === p.id && o.club === b.id)) return;
@@ -1419,14 +1462,14 @@
   }
 
   function aiTransfer(S) {
-    const buyers = S.clubs.filter((c) => c.id !== S.userClub && c.budget > 500000);
+    const buyers = S.clubs.filter((c) => c.id !== S.userClub && c.league !== 'nt' && c.budget > 500000);
     if (!buyers.length) return;
     const b = pick(buyers);
     const sq = squadOf(S, b.id);
     const pos = pick(POS);
     const weakest = sq.filter((p) => p.pos === pos).sort((x, y) => x.ovr - y.ovr)[0];
     const bar = weakest ? weakest.ovr + 3 : 50;
-    const cands = Object.values(S.players).filter((p) => p.pos === pos && p.clubId !== b.id && p.clubId !== S.userClub && !p.discovered && p.ovr >= bar && p.ovr <= b.level + 4 && (p.clubId ? askingPrice(S, p) : 0) <= b.budget * 0.6);
+    const cands = Object.values(S.players).filter((p) => p.pos === pos && p.clubId !== b.id && p.clubId !== S.userClub && !p.discovered && !(p.clubId && p.clubId.startsWith('nt-')) && p.ovr >= bar && p.ovr <= b.level + 4 && (p.clubId ? askingPrice(S, p) : 0) <= b.budget * 0.6);
     if (!cands.length) return;
     const p = pick(cands);
     const fee = p.clubId ? Math.round(p.value * 1.1 / 10000) * 10000 : 0;
@@ -1499,6 +1542,348 @@
     return null;
   }
 
+  // ---------- الكؤوس ودوري الأبطال ----------
+  const AR_MONTHS = ['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان', 'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const arDate = (iso) => (iso ? `${+iso.slice(8, 10)} ${AR_MONTHS[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}` : '');
+  const shiftYear = (iso, n) => (+iso.slice(0, 4) + n) + iso.slice(4);
+  const isHidden = (S, clubId) => { const c = club(S, clubId); return !c || leagueOf(S, c.league).hidden; };
+  function buildCups(S) {
+    const D = root.FM_DATA;
+    S.cups = [];
+    for (const def of D.CUPS) {
+      let clubs;
+      if (def.caf) clubs = S.season === 1 ? def.clubs.filter((id) => club(S, id)) : cafEntrants(S);
+      else clubs = leagueOf(S, def.league).clubs.slice();
+      const rounds = def.rounds.map(([name, date, neutral, date2]) => ({ name, dates: [shiftYear(date, S.season - 1)].concat(date2 ? [shiftYear(date2, S.season - 1)] : []), neutral: !!neutral, ties: [] }));
+      const cup = { id: def.id, name: def.name, league: def.league || null, caf: !!def.caf, prize: def.prize, clubs, rounds, cur: 0, leg: 0, done: false, winner: null };
+      drawRound(S, cup, clubs);
+      S.cups.push(cup);
+    }
+  }
+  // المؤهلون لدوري الأبطال في الموسم التالي: أول اثنين في الجزائر والمغرب وتونس، وبقية الأندية الأفريقية
+  function cafEntrants(S) {
+    const out = [];
+    for (const id of ['dz', 'ma', 'tn']) table(S, id).slice(0, 2).forEach((r) => out.push(r.id));
+    for (const c of S.clubs) if (c.league === 'afr' && out.length < 16) out.push(c.id);
+    return out.slice(0, 16);
+  }
+  function drawRound(S, cup, entrants) {
+    const r = cup.rounds[cup.cur];
+    const needed = Math.pow(2, cup.rounds.length - cup.cur);
+    const byes = Math.max(0, needed - entrants.length);
+    const sorted = entrants.slice().sort((a, b) => club(S, b).rep - club(S, a).rep);
+    const bye = sorted.slice(0, byes), play = shuffle(sorted.slice(byes));
+    r.ties = bye.map((id) => ({ h: id, a: null, w: id, m: [] }));
+    for (let i = 0; i + 1 < play.length; i += 2) {
+      const h = play[i], a = play[i + 1];
+      r.ties.push({ h, a, w: null, pen: null, m: r.dates.map((d, k) => (k === 0 ? { h, a, hg: null, ag: null } : { h: a, a: h, hg: null, ag: null })) });
+    }
+  }
+  function cupUserTie(S, cup) {
+    if (cup.done) return null;
+    const r = cup.rounds[cup.cur];
+    if (!r) return null;
+    const tie = r.ties.find((t) => t.a && (t.h === S.userClub || t.a === S.userClub));
+    if (!tie || tie.w) return null;
+    return { tie, round: r, leg: cup.leg, match: tie.m[cup.leg], date: r.dates[cup.leg] };
+  }
+  // ركلات الترجيح: خمس لكل فريق ثم موت مفاجئ
+  function shootout(S, hId, aId) {
+    const takers = (id) => squadOf(S, id).filter(available).sort((a, b) => b.a.sho - a.a.sho).slice(0, 11);
+    const gk = (id) => squadOf(S, id).filter((p) => p.pos === 'GK').sort((a, b) => b.ovr - a.ovr)[0];
+    const T = [takers(hId), takers(aId)], G = [gk(hId), gk(aId)];
+    const sc = [0, 0];
+    const kick = (k, n) => { const p = T[k][n % T[k].length], g = G[1 - k]; return rand() < clamp(0.75 + ((p ? p.a.sho : 60) - (g ? g.a.gk : 60)) / 400, 0.55, 0.92); };
+    for (let n = 0; n < 5; n++) for (const k of [0, 1]) if (kick(k, n)) sc[k]++;
+    for (let n = 5; sc[0] === sc[1] && n < 30; n++) { if (kick(0, n)) sc[0]++; if (kick(1, n)) sc[1]++; }
+    if (sc[0] === sc[1]) sc[rand() < 0.5 ? 0 : 1]++;
+    return sc;
+  }
+  function playMatchFor(S, f, userMatch, opts) {
+    if (userMatch) return userMatch;
+    for (const id of [f.h, f.a]) {
+      if (id === S.userClub || (S.nt && S.nt.active && id === 'nt-alg')) validateLineup(S, id, S.tactics[id]);
+      else prepareAI(S, id, id === f.h ? f.a : f.h);
+    }
+    const m = createMatch(S, f.h, f.a, S.tactics[f.h], S.tactics[f.a], Object.assign({ quiet: true, ai: [true, true] }, opts || {}));
+    return simulate(S, m);
+  }
+  function playCupLeg(S, cup, userMatch) {
+    const r = cup.rounds[cup.cur], leg = cup.leg;
+    const label = `${cup.name} · ${r.name}${r.dates.length > 1 ? (leg === 0 ? ' (ذهاب)' : ' (إياب)') : ''}`;
+    for (const t of r.ties) {
+      if (!t.a) continue;
+      const f = t.m[leg];
+      const mine = t.h === S.userClub || t.a === S.userClub;
+      const m = playMatchFor(S, f, mine ? userMatch : null, { neutral: r.neutral && r.dates.length === 1, userSide: mine ? (f.h === S.userClub ? 0 : 1) : -1 });
+      applyMatch(S, m, f);
+      if (mine) { S.lastReport = report(S, m); S.lastReport.date = r.dates[leg]; S.lastReport.comp = label; }
+      if (leg === r.dates.length - 1) {
+        let gh = 0, ga = 0;
+        for (const x of t.m) { if (x.h === t.h) { gh += x.hg; ga += x.ag; } else { gh += x.ag; ga += x.hg; } }
+        if (gh === ga) { t.pen = shootout(S, t.h, t.a); t.w = t.pen[0] > t.pen[1] ? t.h : t.a; }
+        else t.w = gh > ga ? t.h : t.a;
+        t.agg = [gh, ga];
+        if (mine) {
+          const won = t.w === S.userClub;
+          if (S.lastReport) S.lastReport.notes.unshift({ good: won, text: `${won ? 'تأهلنا' : 'خرجنا من'} ${cup.name}${t.pen ? ` بركلات الترجيح ${t.pen[0]}-${t.pen[1]}` : r.dates.length > 1 ? ` بمجموع المباراتين ${gh}-${ga}` : ''}` });
+          S.board.conf = clamp(S.board.conf + (won ? 2 : -2), 0, 100);
+        }
+      }
+    }
+    if (leg < r.dates.length - 1) { cup.leg++; return; }
+    const winners = r.ties.map((t) => t.w);
+    cup.leg = 0;
+    if (cup.cur === cup.rounds.length - 1) {
+      cup.done = true;
+      cup.winner = winners[0];
+      club(S, cup.winner).budget += cup.prize;
+      if (cup.winner === S.userClub) { S.trophies = (S.trophies || []).concat([{ name: cup.name, year: `${S.year}/${S.year + 1}` }]); sendMsg(S, 'تتويج!', `${club(S, S.userClub).name} بطل ${cup.name}. مكافأة ${money(cup.prize)}.`, 'board'); S.board.conf = clamp(S.board.conf + 15, 0, 100); }
+      S.news.unshift(`${club(S, cup.winner).name} يتوج بـ${cup.name}`);
+      return;
+    }
+    cup.cur++;
+    drawRound(S, cup, winners);
+    if (winners.includes(S.userClub)) {
+      const t = cup.rounds[cup.cur].ties.find((x) => x.h === S.userClub || x.a === S.userClub);
+      if (t && t.a) sendMsg(S, `قرعة ${cup.name}`, `في ${cup.rounds[cup.cur].name} نواجه ${club(S, t.h === S.userClub ? t.a : t.h).name} يوم ${arDate(cup.rounds[cup.cur].dates[0])}.`, 'info');
+    }
+  }
+
+  // ---------- المنتخب ----------
+  function buildNT(S) {
+    const D = root.FM_DATA;
+    const Q = D.QUALIFIERS;
+    const prev = S.nt;
+    if (S.season === 1) S.nt = { active: false, conf: 60, name: Q.name, fixtures: Q.fixtures.map(([date, h, a]) => ({ date, h, a, hg: null, ag: null })), group: ['nt-alg', 'nt-zam', 'nt-tog', 'nt-bdi'], kind: 'qual' };
+    else {
+      const y = S.year;
+      const dates = [`${y}-09-05`, `${y}-10-10`, `${y}-11-14`, `${y + 1}-03-27`];
+      const opps = shuffle(['nt-zam', 'nt-tog', 'nt-bdi', 'nt-zam']);
+      S.nt = { active: prev ? prev.active : false, conf: prev ? prev.conf : 60, name: `مباريات ودية ${y}/${y + 1}`, fixtures: dates.map((d, i) => (i % 2 ? { date: d, h: opps[i], a: 'nt-alg', hg: null, ag: null } : { date: d, h: 'nt-alg', a: opps[i], hg: null, ag: null })), group: null, kind: 'friendly' };
+    }
+  }
+  function ntTable(S) {
+    const rows = {};
+    for (const id of S.nt.group || []) rows[id] = { id, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, form: [] };
+    for (const f of S.nt.fixtures) {
+      if (f.hg === null || !rows[f.h] || !rows[f.a]) continue;
+      const h = rows[f.h], a = rows[f.a];
+      h.p++; a.p++; h.gf += f.hg; h.ga += f.ag; a.gf += f.ag; a.ga += f.hg;
+      if (f.hg > f.ag) { h.w++; a.l++; h.pts += 3; } else if (f.hg < f.ag) { a.w++; h.l++; a.pts += 3; } else { h.d++; a.d++; h.pts++; a.pts++; }
+    }
+    return Object.values(rows).sort((x, y) => y.pts - x.pts || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf);
+  }
+  function playNTDate(S, date, userMatch) {
+    for (const f of S.nt.fixtures) {
+      if (f.date !== date || f.hg !== null) continue;
+      const mine = S.nt.active && (f.h === 'nt-alg' || f.a === 'nt-alg');
+      const m = playMatchFor(S, f, mine ? userMatch : null, { userSide: mine ? (f.h === 'nt-alg' ? 0 : 1) : -1 });
+      applyMatch(S, m, f);
+      if (f.h === 'nt-alg' || f.a === 'nt-alg') {
+        const u = f.h === 'nt-alg' ? 0 : 1;
+        const gf = u === 0 ? f.hg : f.ag, ga = u === 0 ? f.ag : f.hg;
+        const opp = club(S, u === 0 ? f.a : f.h).short;
+        S.news.unshift(`الخضر ${gf > ga ? 'يفوزون على' : gf < ga ? 'يخسرون أمام' : 'يتعادلون مع'} ${opp} ${gf}-${ga}`);
+        if (mine) { S.lastReport = report(S, m); S.lastReport.date = date; S.lastReport.comp = S.nt.name; S.nt.conf = clamp(S.nt.conf + Math.sign(gf - ga) * 6, 0, 100); }
+      }
+    }
+    if (S.nt.group && S.nt.fixtures.every((f) => f.hg !== null) && !S.nt.done) {
+      S.nt.done = true;
+      const pos = ntTable(S).findIndex((r) => r.id === 'nt-alg') + 1;
+      sendMsg(S, pos <= 2 ? 'الخضر في كأس أفريقيا 2027' : 'خيبة للخضر', pos <= 2 ? `أنهى المنتخب الجزائري المجموعة في المركز ${pos} وتأهل إلى كأس أمم أفريقيا 2027 في كينيا وتنزانيا وأوغندا.` : `أنهى المنتخب المجموعة في المركز ${pos} ولم يتأهل.`, 'board');
+      if (S.nt.active && pos <= 2) S.trophies = (S.trophies || []).concat([{ name: 'التأهل إلى كأس أفريقيا 2027 مع الجزائر', year: `${S.year}/${S.year + 1}` }]);
+    }
+  }
+  function acceptNT(S, on) { S.nt.active = !!on; if (on) autoPick(S, 'nt-alg', S.tactics['nt-alg']); }
+
+  // ---------- الرزنامة: الحدث القادم للمدرب ----------
+  function nextEvent(S) {
+    const out = [];
+    const ul = userLeague(S);
+    if (S.week < ul.fixtures.length) { const f = userFixture(S); if (f) out.push({ type: 'league', date: ul.dates[S.week], f, comp: ul.name, label: `${ul.short} · الجولة ${S.week + 1}`, me: S.userClub }); }
+    for (const c of S.cups || []) {
+      const x = cupUserTie(S, c);
+      if (x) out.push({ type: 'cup', cup: c.id, date: x.date, f: x.match, comp: c.name, label: `${c.name} · ${x.round.name}${x.round.dates.length > 1 ? (x.leg === 0 ? ' (ذهاب)' : ' (إياب)') : ''}`, me: S.userClub, neutral: x.round.neutral && x.round.dates.length === 1 });
+    }
+    if (S.nt && S.nt.active) { const f = S.nt.fixtures.find((x) => x.hg === null && (x.h === 'nt-alg' || x.a === 'nt-alg')); if (f) out.push({ type: 'nt', date: f.date, f, comp: S.nt.name, label: S.nt.name, me: 'nt-alg' }); }
+    out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.type === 'league' ? 1 : -1));
+    return out[0] || null;
+  }
+  // يلعب كل ما يسبق التاريخ ولا يخص المدرب: جولات الدوريات الأخرى، أدوار الكؤوس، مباريات المنتخبات
+  function advanceTo(S, date) {
+    const ul = userLeague(S);
+    for (const lg of S.leagues) if (lg !== ul && !lg.hidden) while (lg.played < lg.fixtures.length && lg.dates[lg.played] < date) playLeagueRound(S, lg, null);
+    for (const c of S.cups || []) {
+      let guard = 0;
+      while (!c.done && guard++ < 20) {
+        const r = c.rounds[c.cur];
+        if (r.dates[c.leg] >= date || cupUserTie(S, c)) break;
+        playCupLeg(S, c, null);
+      }
+    }
+    if (S.nt) {
+      const dates = [...new Set(S.nt.fixtures.filter((f) => f.hg === null && f.date < date).map((f) => f.date))];
+      for (const d of dates) {
+        if (S.nt.active && S.nt.fixtures.some((f) => f.date === d && f.hg === null && (f.h === 'nt-alg' || f.a === 'nt-alg'))) break;
+        playNTDate(S, d, null);
+      }
+    }
+  }
+  function playEvent(S, ev, userMatch) {
+    advanceTo(S, ev.date);
+    if (ev.type === 'league') playRound(S, userMatch);
+    else if (ev.type === 'cup') playCupLeg(S, S.cups.find((c) => c.id === ev.cup), userMatch);
+    else playNTDate(S, ev.date, userMatch);
+    if (S.lastReport) S.lastReport.comp = S.lastReport.comp || ev.label;
+    makePaper(S, ev);
+    maybeEndSeason(S);
+  }
+  function maybeEndSeason(S) {
+    const ul = userLeague(S);
+    if (S.week < ul.fixtures.length || S.unemployed) return;
+    if (nextEvent(S)) return;
+    for (const lg of S.leagues) if (!lg.hidden) while (lg.played < lg.fixtures.length) playLeagueRound(S, lg, null);
+    for (const c of S.cups || []) { let g = 0; while (!c.done && g++ < 20) playCupLeg(S, c, null); }
+    if (S.nt) for (const d of [...new Set(S.nt.fixtures.filter((f) => f.hg === null).map((f) => f.date))]) playNTDate(S, d, null);
+    endSeason(S);
+  }
+
+  // ---------- المسيرة: عروض التدريب ----------
+  function jobOffers(S, kind) {
+    const me = club(S, S.userClub);
+    const pool = S.clubs.filter((c) => c.id !== me.id && !leagueOf(S, c.league).hidden);
+    const mrep = S.mgr ? S.mgr.rep : me.rep;
+    let cands = kind === 'success' ? pool.filter((c) => c.rep > me.rep + 2 && c.rep <= mrep + 16) : pool.filter((c) => c.rep <= me.rep - 3 && c.rep >= me.rep - 24);
+    if (!cands.length && kind === 'sacked') cands = pool.filter((c) => c.rep <= me.rep).sort((a, b) => b.rep - a.rep).slice(0, 6);
+    S.jobOffers = shuffle(cands).slice(0, 3).map((c) => ({ club: c.id, kind }));
+    for (const o of S.jobOffers) sendMsg(S, 'عرض تدريب', `${club(S, o.club).name} (${leagueOf(S, club(S, o.club).league).name}) يعرض عليك تدريب الفريق.`, 'board');
+    return S.jobOffers;
+  }
+  function takeJob(S, clubId) {
+    const c = club(S, clubId);
+    const old = club(S, S.userClub);
+    S.mgr = S.mgr || { rep: old.rep, clubs: [] };
+    S.mgr.clubs = (S.mgr.clubs || []).concat([{ club: old.name, until: `${S.year}/${S.year + 1}` }]);
+    S.userClub = clubId;
+    const lg = leagueOf(S, c.league);
+    S.week = lg.played;
+    S.board = { conf: 60, target: targetPosition(S, clubId) };
+    S.listed = []; S.offers = []; S.formLine = []; S.lastUserTactic = null; S.oppPlan = null; S.talks = []; S.jobOffers = [];
+    S.facilities = { training: clamp(Math.round(c.rep / 25), 1, 4), youth: clamp(Math.round(c.rep / 30), 1, 3), scouting: clamp(Math.round(c.rep / 30), 1, 3) };
+    S.unemployed = false; S.gameOver = false;
+    squadOf(S, clubId).forEach((p) => { p.know = Math.max(p.know, 80); });
+    validateLineup(S, clubId, S.tactics[clubId]);
+    sendMsg(S, `مرحبًا في ${c.name}`, `وقّعت مع ${c.name}. هدف المجلس: ${targetText(S)}. الميزانية ${money(c.budget)}.`, 'board');
+  }
+
+  // ---------- مقابلات اللاعبين ----------
+  const TALK_REASON = { minutes: 'غاضب من قلة دقائق اللعب', morale: 'معنوياته منخفضة ويريد التحدث', contract: 'عقده ينتهي ويسأل عن مستقبله' };
+  function genTalks(S) {
+    S.talks = (S.talks || []).filter((t) => S.players[t.pid] && S.players[t.pid].clubId === S.userClub);
+    if (S.talks.length >= 2 || rand() < 0.65) return;
+    const sq = squadOf(S, S.userClub).sort((a, b) => b.ovr - a.ovr);
+    const top = sq.slice(0, 18);
+    const t = myTactic(S);
+    let p = top.find((x) => x.morale < 38 && !t.lineup.includes(x.id) && !x.promise && !S.talks.some((k) => k.pid === x.id));
+    let reason = 'minutes';
+    if (!p) { p = top.find((x) => x.morale < 32 && !x.promise && !S.talks.some((k) => k.pid === x.id)); reason = 'morale'; }
+    if (!p) { p = sq.slice(0, 14).find((x) => x.contract <= 1 && rand() < 0.2 && !S.talks.some((k) => k.pid === x.id)); reason = 'contract'; }
+    if (!p) return;
+    S.talks.push({ id: 't' + S.nextId++, pid: p.id, reason, week: S.week });
+    sendMsg(S, 'طلب مقابلة', `${p.name} ${TALK_REASON[reason]}. افتح المقابلة من الرئيسية.`, 'talk');
+  }
+  const myTactic = (S) => S.tactics[S.userClub];
+  // option: promise | fight | sell | renew — أو أثر محسوب من محادثة الذكاء الاصطناعي
+  function resolveTalk(S, tid, option, aiResult) {
+    const t = (S.talks || []).find((x) => x.id === tid);
+    if (!t) return null;
+    const p = S.players[t.pid];
+    let d = 0, msg;
+    if (aiResult) { d = clamp(Math.round(+aiResult.morale_delta || 0), -25, 25); if (aiResult.promise) p.promise = { until: S.week + 3, starts: 0 }; msg = aiResult.summary || ''; }
+    else if (option === 'promise') { d = 22; p.promise = { until: S.week + 3, starts: 0 }; msg = `${p.name} خرج راضيًا بوعد المشاركة أساسيًا في المباريات الثلاث القادمة.`; }
+    else if (option === 'fight') { d = p.age >= 27 ? ri(-2, 12) : ri(-8, 10); msg = d >= 0 ? `${p.name} تقبّل كلامك وسيقاتل على مكانه.` : `${p.name} لم يقتنع بكلامك.`; }
+    else if (option === 'sell') { d = -15; if (!S.listed.includes(p.id)) S.listed.push(p.id); for (const q of squadOf(S, S.userClub)) q.morale = clamp(q.morale - 1, 10, 100); msg = `${p.name} عُرض للبيع، والأجواء في غرفة الملابس متوترة.`; }
+    else if (option === 'renew') { const err = renew(S, p.id, 3); d = err ? -8 : 10; msg = err || `${p.name} جدد عقده ثلاث سنوات.`; }
+    p.morale = clamp(p.morale + d, 5, 100);
+    S.talks = S.talks.filter((x) => x !== t);
+    return { delta: d, msg };
+  }
+  function checkPromises(S, m, u) {
+    const starters = new Set(m.sides[u].tactic.lineup);
+    for (const p of squadOf(S, S.userClub)) {
+      if (!p.promise) continue;
+      if (starters.has(p.id)) p.promise.starts++;
+      if (S.week + 1 >= p.promise.until) {
+        if (p.promise.starts < 2) { p.morale = clamp(p.morale - 30, 5, 100); S.board.conf = clamp(S.board.conf - 2, 0, 100); sendMsg(S, 'وعد لم يُوفَ به', `${p.name} يشتكي للصحافة: «وعدني المدرب بالمشاركة ولم يفِ».`, 'talk'); S.news.unshift(`${p.name} ينتقد مدربه علنًا`); }
+        p.promise = null;
+      }
+    }
+  }
+
+  // ---------- الندوة الصحفية ----------
+  function genPress(S, ev) {
+    const me = club(S, S.userClub);
+    const oppId = ev ? (ev.f.h === ev.me ? ev.f.a : ev.f.h) : null;
+    const opp = oppId ? club(S, oppId) : null;
+    const form = S.formLine.slice(-5);
+    const losses = form.filter((r) => r.gf < r.ga).length, wins = form.filter((r) => r.gf > r.ga).length;
+    const sq = squadOf(S, ev ? ev.me : S.userClub).sort((a, b) => b.ovr - a.ovr);
+    const inj = sq.find((p) => p.inj > 0 && sq.indexOf(p) < 11);
+    const qs = [];
+    const opts = (calm, conf, sharp) => [{ tone: 'هادئ', text: calm, eff: { morale: 1, board: 1, opp: 0 } }, { tone: 'واثق', text: conf, eff: { morale: 4, board: 0, opp: 2 } }, { tone: 'حاد', text: sharp, eff: { morale: 2, board: -2, opp: 4 } }];
+    if (losses >= 3) qs.push({ q: `خسرتم ${losses} من آخر ${form.length} مباريات. هل منصبك في خطر؟`, options: opts('نمر بفترة صعبة ونعمل بهدوء لتصحيحها.', 'أنا واثق من لاعبيّ، وسنعود قريبًا.', 'لست هنا لأتحدث عن منصبي، اسألوا عن كرة القدم.') });
+    else if (wins >= 3) qs.push({ q: `${wins} انتصارات في آخر ${form.length} مباريات. هل بدأتم تفكرون في اللقب؟`, options: opts('نفكر في المباراة القادمة فقط.', 'نعم، هذا الفريق قادر على المنافسة حتى النهاية.', 'من لا يؤمن بنا سيرى في نهاية الموسم.') });
+    else qs.push({ q: `المجلس يطلب ${targetText(S)}. هل الهدف واقعي؟`, options: opts('هدف منطقي ونعمل لتحقيقه خطوة بخطوة.', 'سنحققه وربما أكثر.', 'الأهداف تُحقق في الملعب، لا في المؤتمرات.') });
+    if (opp) qs.push({ q: `${opp.name} ${opp.rep > me.rep ? 'يُعتبر الأقوى على الورق' : 'أقل منكم على الورق'}. كيف ترى مباراة ${ev.label}؟`, options: opts(`نحترم ${opp.short} ونستعد جيدًا.`, `جئنا لنفوز، ولدينا خطة واضحة.`, `${opp.short} سيعاني أمامنا.`) });
+    if (inj) qs.push({ q: `غياب ${inj.name} مؤثر. من سيعوّضه؟`, options: opts('لدينا بدائل جاهزة وسنتأقلم.', 'الفريق أكبر من أي لاعب.', 'لن أكشف خطتي أمامكم.') });
+    else if (sq[0]) qs.push({ q: `أندية كبرى مهتمة بـ${sq[0].name}. هل سيبقى؟`, options: opts(`${sq[0].name} مرتاح هنا ولا جديد.`, `${sq[0].name} لاعب هذا المشروع وسيبقى.`, 'لن أتحدث عن الإشاعات.') });
+    return qs.slice(0, 3);
+  }
+  // يطبّق أثر الأجوبة: معنويات الفريق، ثقة المجلس، وحماس الخصم في المباراة القادمة
+  function applyPress(S, answers, ev, extraHeadline) {
+    let mor = 0, brd = 0, opp = 0;
+    for (const a of answers) { mor += a.eff.morale || 0; brd += a.eff.board || 0; opp += a.eff.opp || 0; }
+    const team = ev ? ev.me : S.userClub;
+    for (const p of squadOf(S, team)) p.morale = clamp(p.morale + mor, 5, 100);
+    if (team === S.userClub) S.board.conf = clamp(S.board.conf + brd, 0, 100);
+    const oppId = ev ? (ev.f.h === ev.me ? ev.f.a : ev.f.h) : null;
+    if (oppId && opp) for (const p of squadOf(S, oppId)) p.morale = clamp(p.morale + opp, 5, 100);
+    const quote = answers.length ? answers[answers.length - 1].text : '';
+    S.press = { season: S.season, week: S.week, quote, headline: extraHeadline || null };
+    return { mor, brd, opp };
+  }
+
+  // ---------- صحيفة «صدى الملاعب» ----------
+  function makePaper(S, ev) {
+    const R = S.lastReport;
+    if (!R) return;
+    const u = R.user >= 0 ? R.user : 0;
+    const A = R.sides[u], B = R.sides[1 - u];
+    const ca = club(S, A.clubId), cb = club(S, B.clubId);
+    const d = A.goals - B.goals;
+    const sc = `${A.goals}-${B.goals}`;
+    const head = d >= 3 ? `${ca.short} يكتسح ${cb.short} ${sc}` : d > 0 ? `${ca.short} يتجاوز ${cb.short} ${sc}` : d === 0 ? `تعادل ${sc} بين ${ca.short} و${cb.short}` : d <= -3 ? `سقوط مدوٍّ لـ${ca.short} أمام ${cb.short}` : `${ca.short} يتعثر أمام ${cb.short} ${sc}`;
+    const scorers = A.scorers.map((g) => S.players[g.id] && S.players[g.id].name).filter(Boolean);
+    const motm = R.motm && S.players[R.motm.id] ? S.players[R.motm.id].name : null;
+    const sub = `${ev ? ev.label + ' · ' : ''}${scorers.length ? 'سجل ' + [...new Set(scorers)].join(' و') + '. ' : ''}${motm ? 'رجل المباراة: ' + motm + '.' : ''}`;
+    const items = [];
+    if (S.press && S.press.week === S.week - (ev && ev.type === 'league' ? 1 : 0) && S.press.quote) items.push({ title: 'قالها المدرب', body: `«${S.press.quote}» — ${S.manager} في الندوة الصحفية.` });
+    for (const lg of S.leagues) {
+      if (lg.hidden || !lg.played) continue;
+      const t = table(S, lg.id);
+      const last = lg.fixtures[lg.played - 1] || [];
+      const big = last.filter((f) => f.hg !== null).sort((x, y) => Math.abs(y.hg - y.ag) - Math.abs(x.hg - x.ag))[0];
+      items.push({ title: `${lg.short}: ${club(S, t[0].id).name} في الصدارة`, body: `بعد ${lg.played} جولة يتصدر ${club(S, t[0].id).short} بـ${t[0].pts} نقطة متقدمًا على ${club(S, t[1].id).short} (${t[1].pts}).${big ? ` أبرز نتيجة: ${club(S, big.h).short} ${big.hg}-${big.ag} ${club(S, big.a).short}.` : ''}` });
+    }
+    const allP = Object.values(S.players).filter((p) => p.clubId && !isHidden(S, p.clubId));
+    const ts = allP.sort((a, b) => b.st.goals - a.st.goals)[0];
+    if (ts && ts.st.goals) items.push({ title: 'سباق الهدافين', body: `${ts.name} (${club(S, ts.clubId).short}) يتصدر بـ${ts.st.goals} هدفًا.` });
+    for (const n of (S.news || []).slice(0, 3)) items.push({ title: 'سوق وأخبار', body: n });
+    if (S.board.conf < 30) items.push({ title: 'الضغط يتزايد', body: `مصادر داخل ${club(S, S.userClub).name}: ثقة المجلس في ${S.manager} تراجعت إلى ${S.board.conf}%.` });
+    S.papers = [{ n: (S.papers && S.papers[0] ? S.papers[0].n + 1 : 1), date: R.date || '', head, sub, items: items.slice(0, 7), ai: false }].concat(S.papers || []).slice(0, 8);
+  }
+
   // ---------- نهاية الموسم ----------
   function endSeason(S) {
     const user = S.userClub;
@@ -1522,6 +1907,7 @@
     else { verdict = 'المجلس غاضب: النتائج بعيدة عن المطلوب'; S.board.conf = clamp(S.board.conf - 25, 0, 100); }
     const others = [];
     for (const lg of S.leagues) {
+      if (lg.hidden) continue;
       const t = table(S, lg.id);
       t.forEach((r, i) => { club(S, r.id).budget += lg.econ.prize * (t.length - i) + (i === 0 ? lg.econ.champ : 0); });
       if (lg !== ul) others.push({ league: lg.name, champ: club(S, t[0].id).name });
@@ -1530,7 +1916,12 @@
     const label = `${S.year}/${S.year + 1}`;
     S.history.push({ season: S.season, year: label, league: ul.short, pos, pts: tb[pos - 1].pts, champ: champ.name, scorer: scorer ? `${scorer.name} (${scorer.st.goals})` : '—', best: best ? best.name : '—', verdict, target });
     S.seasonEnd = { label, pos, champ: champ.name, scorer: scorer ? { name: scorer.name, goals: scorer.st.goals, club: club(S, scorer.clubId).name } : null, best: best ? { name: best.name, avg: round1(best.st.rsum / best.st.apps) } : null, prize, verdict, target, others, relegated };
-    if (relegated || S.board.conf < 15) { S.gameOver = true; sendMsg(S, 'إقالة', `قرر مجلس الإدارة إنهاء عقدك بعد المركز ${pos}.`, 'board'); return; }
+    const sacked = relegated || S.board.conf < 15;
+    const won = (S.trophies || []).filter((t) => t.year === label).length + (pos === 1 ? 1 : 0);
+    S.mgr = S.mgr || { rep: me.rep, clubs: [] };
+    S.mgr.rep = clamp(Math.round(S.mgr.rep + (target - pos) * 1.5 + won * 5 - (sacked ? 8 : 0)), 30, 99);
+    if (pos === 1) S.trophies = (S.trophies || []).concat([{ name: ul.name, year: label }]);
+    if (sacked) sendMsg(S, 'إقالة', `قرر مجلس الإدارة إنهاء عقدك بعد المركز ${pos}.`, 'board');
     const retired = [], left = [];
     for (const p of Object.values(S.players)) {
       p.age++;
@@ -1554,15 +1945,15 @@
     const youth = [];
     const yl = S.facilities.youth;
     for (let k = 0; k < 2 + yl; k++) {
-      const p = genPlayer(S, { pos: pick(POS), age: ri(16, 18), target: Math.round(me.level - 24 + yl * 2 + gauss() * 3), region: me.league === 'dz' ? 'dz' : 'en', clubId: user, potBoost: 8 + yl * 4 + (rand() < 0.12 * yl ? 12 : 0), contract: 3, know: 70 + yl * 5 });
+      const p = genPlayer(S, { pos: pick(POS), age: ri(16, 18), target: Math.round(me.level - 24 + yl * 2 + gauss() * 3), region: regionFor(me), clubId: user, potBoost: 8 + yl * 4 + (rand() < 0.12 * yl ? 12 : 0), contract: 3, know: 70 + yl * 5 });
       p.gen = true;
       p.wage = Math.round(ul.econ.wageMin * 0.4);
       assignNumber(S, p);
       youth.push(p);
     }
     for (const c of S.clubs) {
-      if (c.id === user) continue;
-      for (let k = 0; k < 2; k++) { const p = genPlayer(S, { pos: pick(POS), age: ri(17, 19), target: Math.round(c.level - 20 + gauss() * 3), region: c.league === 'dz' ? 'dz' : 'en', clubId: c.id, potBoost: 10 }); p.gen = true; assignNumber(S, p); }
+      if (c.id === user || c.league === 'nt') continue;
+      for (let k = 0; k < 2; k++) { const p = genPlayer(S, { pos: pick(POS), age: ri(17, 19), target: Math.round(c.level - 20 + gauss() * 3), region: regionFor(c), clubId: c.id, potBoost: 10 }); p.gen = true; assignNumber(S, p); }
       fillSquad(S, c, c.level);
     }
     for (let i = 0; i < 12; i++) { const dz = i % 2 === 0; const p = genPlayer(S, { pos: pick(POS), age: ri(21, 33), target: dz ? ri(54, 64) : ri(64, 75), region: dz ? pick(['dz', 'ma', 'tn', 'eg', 'wa']) : pick(['en', 'sa', 'ee', 'wa']), clubId: null, contract: 0 }); p.gen = true; }
@@ -1574,6 +1965,7 @@
     S.week = 0;
     S.formLine = [];
     for (const lg of S.leagues) {
+      if (lg.hidden) continue;
       lg.start = nextYear(lg.start);
       lg.end = nextYear(lg.end);
       lg.fixtures = genFixtures(lg.clubs.slice());
@@ -1582,6 +1974,11 @@
     }
     for (const c of S.clubs) { c.level = clubLevel(S, c.id); validateLineup(S, c.id, S.tactics[c.id]); if (c.id !== user) autoPick(S, c.id, S.tactics[c.id]); }
     S.board.target = targetPosition(S, user);
+    buildCups(S);
+    buildNT(S);
+    S.talks = [];
+    if (sacked) { S.unemployed = true; jobOffers(S, 'sacked'); }
+    else if (pos <= target && rand() < 0.75) jobOffers(S, 'success');
     sendMsg(S, `انطلاق موسم ${S.year}/${S.year + 1}`, `هدف المجلس: ${targetText(S)}. انضم ${youth.length} لاعبين من أكاديمية الشباب.${retired.length ? ` اعتزل: ${retired.join('، ')}.` : ''}${left.length ? ` غادر بنهاية العقد: ${left.join('، ')}.` : ''}`, 'board');
   }
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -1592,7 +1989,7 @@
     newGame, club, squadOf, available, ovrAt, familiarity, autoPick, validateLineup, profile, previewProfile, tacticalFactors,
     createMatch, stepMinute, simulate, substitute, refresh, applyMatch, report, expected, monteCarlo, recommend,
     table, position, userFixture, playRound, prepareAI, askingPrice, wageDemand, makeOffer, acceptOffer, rejectOffer, release, releaseCost,
-    renew, renewDemand, leagueOf, userLeague, clubLeague, fixtureDate, targetText, startScout, scoutPlayer, maxScouts, upgradeFacility, sendMsg, isKey, maxAttract,
+    renew, renewDemand, nextEvent, playEvent, advanceTo, cupUserTie, ntTable, acceptNT, takeJob, jobOffers, resolveTalk, genPress, applyPress, makePaper, TALK_REASON, isHidden, leagueOf, userLeague, clubLeague, fixtureDate, targetText, startScout, scoutPlayer, maxScouts, upgradeFacility, sendMsg, isKey, maxAttract,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = FM;
   else root.FM = FM;

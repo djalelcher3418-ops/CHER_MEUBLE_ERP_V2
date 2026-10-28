@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const FM = window.FM;
-  const SAVE_KEY = 'dakka-save-v2';
+  const SAVE_KEY = 'dakka-save-v3';
   const esc = (s) => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = FM.money;
   const num = (v) => `<bdi class="num" dir="ltr">${v}</bdi>`;
@@ -27,7 +27,7 @@
 
   // ---------- الحفظ ----------
   function save() {
-    if (!S) return;
+    if (!S || UI.careerS !== undefined) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* التخزين غير متاح: نكمل دون حفظ */ }
   }
   function loadSave() {
@@ -130,20 +130,21 @@
   }
 
   // ---------- الرأس والتبويبات ----------
-  const VIEWS = [['home', 'الرئيسية'], ['squad', 'الفريق'], ['tactics', 'التكتيك'], ['analysis', 'التحليل'], ['ai', 'المساعد الذكي'], ['transfers', 'الانتقالات'], ['scouting', 'الكشافة'], ['training', 'التدريب'], ['league', 'الدوري'], ['finance', 'المالية'], ['inbox', 'البريد']];
+  const VIEWS = [['home', 'الرئيسية'], ['squad', 'الفريق'], ['tactics', 'التكتيك'], ['analysis', 'التحليل'], ['ai', 'المساعد الذكي'], ['league', 'المسابقات'], ['national', 'المنتخب'], ['paper', 'الصحيفة'], ['transfers', 'الانتقالات'], ['scouting', 'الكشافة'], ['training', 'التدريب'], ['finance', 'المالية'], ['inbox', 'البريد'], ['friend', 'مع صديق']];
   function header() {
     const c = me();
     const unread = S.inbox.filter((x) => !x.read).length;
     const offers = S.offers.length;
     const total = FM.userLeague(S).fixtures.length;
+    const nev = S.unemployed ? null : FM.nextEvent(S);
     const live = UI.view === 'match';
     return `<header class="top"><div class="wrap">
-      <div class="brand">${crest(c, 34)}<div><div class="nm">${esc(c.name)}</div><div class="sub">${esc(S.manager)} · ${esc(FM.userLeague(S).short)} ${num(S.year + '/' + (S.year + 1))} · الجولة ${num(Math.min(S.week + 1, total) + '/' + total)}${FM.fixtureDate(S) ? ' · ' + fdate(FM.fixtureDate(S)) : ''}</div></div></div>
+      <div class="brand">${crest(c, 34)}<div><div class="nm">${esc(c.name)}</div><div class="sub">${esc(S.manager)} · ${esc(FM.userLeague(S).short)} ${num(S.year + '/' + (S.year + 1))} · الجولة ${num(Math.min(S.week + 1, total) + '/' + total)}${nev ? ' · ' + esc(nev.label) + ' ' + fdate(nev.date) : ''}</div></div></div>
       <div class="meta">
         <div><div class="k">الرصيد</div><div class="v ${c.budget < 0 ? 'bad' : ''}">${$m(c.budget)}</div></div>
         <div><div class="k">المركز</div><div class="v">${num(FM.position(S, c.id))} <span class="muted" style="font-weight:400">/ الهدف ${num(S.board.target)}</span></div></div>
         <div><div class="k">ثقة المجلس</div><div class="v ${S.board.conf < 30 ? 'bad' : S.board.conf > 65 ? 'good' : ''}">${num(S.board.conf + '%')}</div></div>
-        ${live ? '' : `<button class="btn pri" data-a="next">${S.gameOver ? 'انتهت المسيرة' : 'إلى المباراة ◂'}</button>`}
+        ${live ? '' : S.unemployed ? '<button class="btn pri" data-a="offers">أنت بلا نادٍ: اختر عرضًا</button>' : `<button class="btn pri" data-a="next">إلى المباراة ◂</button>`}
       </div></div>
       ${live ? '' : `<nav class="nav wrap" aria-label="الأقسام">${VIEWS.map(([k, t]) => `<button class="${UI.view === k ? 'on' : ''}" data-a="nav" data-v="${k}">${t}${k === 'inbox' && unread ? `<span class="badge">${unread}</span>` : ''}${k === 'transfers' && offers ? `<span class="badge">${offers}</span>` : ''}</button>`).join('')}</nav>`}
     </header>`;
@@ -162,7 +163,7 @@
       <div class="eyebrow">لعبة إدارة وتحليل كرة القدم · موسم ${D.season}</div>
       <h1>دكّة <em>المدرب</em></h1>
       <p>أندية حقيقية وتشكيلاتها بعد سوق انتقالات صيف 2026، ورزنامة الموسم بجولته الافتتاحية الحقيقية. أنت المدير الفني: ترسم الخطة، تحلل الخصم، تكتشف المواهب، تشتري وتبيع، ثم تقود فريقك من على الخط.</p>
-      ${saved && saved.v === 2 && !saved.gameOver ? `<div class="row" style="margin-top:8px"><button class="btn pri" data-a="continue">متابعة المسيرة: ${esc(saved.clubs.find((c) => c.id === saved.userClub).name)} · ${saved.year}/${saved.year + 1}</button><span class="muted">أو اختر ناديًا لمسيرة جديدة</span></div>` : ''}
+      ${saved && saved.v === 3 ? `<div class="row" style="margin-top:8px"><button class="btn pri" data-a="continue">متابعة المسيرة: ${esc(saved.clubs.find((c) => c.id === saved.userClub).name)} · ${saved.year}/${saved.year + 1}</button><span class="muted">أو اختر ناديًا لمسيرة جديدة</span></div>` : ''}
     </div>
     <main class="wrap" style="padding-block:10px 20px">
       <div class="row sp"><h3>اختر الدوري والنادي</h3><div class="tabs">${D.LEAGUES.map((l) => `<button class="${l.id === L.id ? 'on' : ''}" data-a="pickLeague" data-v="${l.id}">${esc(l.name)}</button>`).join('')}</div></div>
@@ -174,27 +175,30 @@
     </main>
     <div class="startbar"><div class="wrap">
       <div class="field" style="flex:1;min-width:200px"><label for="mgr">اسم المدرب</label><input type="text" id="mgr" data-c="mgrName" value="${esc(UI.start.name)}" placeholder="مثال: جلال" maxlength="30"></div>
+      <button class="btn" data-a="nav" data-v="friend">مباراة مع صديق</button>
       <button class="btn pri" data-a="newGame" data-v="${sel.k}">ابدأ المسيرة مع ${esc(sel.name)}</button>
     </div></div>`;
   }
 
   // ---------- الرئيسية ----------
   function homeView() {
-    const f = FM.userFixture(S);
+    const ev = S.unemployed ? null : FM.nextEvent(S);
+    const f = ev && ev.f;
     const tb = FM.table(S);
     const myPos = tb.findIndex((r) => r.id === S.userClub);
-    let next = '<div class="empty">لا مباراة هذا الأسبوع</div>';
+    let next = `<div class="empty">${S.unemployed ? 'أنت بلا نادٍ. اختر عرضًا من الأعلى.' : 'لا مباريات متبقية'}</div>`;
     if (f) {
       const h = FM.club(S, f.h), a = FM.club(S, f.a);
-      const oppId = f.h === S.userClub ? f.a : f.h;
+      const oppId = f.h === ev.me ? f.a : f.h;
       const rows = Object.fromEntries(tb.map((r, i) => [r.id, Object.assign({ pos: i + 1 }, r)]));
-      FM.validateLineup(S, S.userClub, myT());
-      FM.prepareAI(S, oppId, S.userClub);
+      const rowOf = (id) => rows[id] || { form: [], pos: null };
+      FM.validateLineup(S, ev.me, S.tactics[ev.me]);
+      FM.prepareAI(S, oppId, ev.me);
       const e = FM.expected(S, f.h, S.tactics[f.h], f.a, S.tactics[f.a]);
       next = `<div class="fixture">
-        <div class="side">${crest(h, 54)}<div class="nm">${esc(h.name)}</div><div class="row" style="justify-content:center">${formChips(rows[h.id].form)}</div><div class="muted" style="font-size:.8rem">المركز ${num(rows[h.id].pos)}</div></div>
-        <div><div class="vs">الجولة ${num(S.week + 1)}</div><div class="score muted">ضد</div><div class="vs">${fdate(FM.fixtureDate(S), true)}</div><div class="vs">${esc(h.stadium)}</div></div>
-        <div class="side">${crest(a, 54)}<div class="nm">${esc(a.name)}</div><div class="row" style="justify-content:center">${formChips(rows[a.id].form)}</div><div class="muted" style="font-size:.8rem">المركز ${num(rows[a.id].pos)}</div></div>
+        <div class="side">${crest(h, 54)}<div class="nm">${esc(h.name)}</div><div class="row" style="justify-content:center">${formChips(rowOf(h.id).form)}</div>${rowOf(h.id).pos ? `<div class="muted" style="font-size:.8rem">المركز ${num(rowOf(h.id).pos)}</div>` : ''}</div>
+        <div><div class="vs">${esc(ev.label)}</div><div class="score muted">ضد</div><div class="vs">${fdate(ev.date, true)}</div><div class="vs">${ev.neutral ? 'ملعب محايد' : esc(h.stadium)}</div></div>
+        <div class="side">${crest(a, 54)}<div class="nm">${esc(a.name)}</div><div class="row" style="justify-content:center">${formChips(rowOf(a.id).form)}</div>${rowOf(a.id).pos ? `<div class="muted" style="font-size:.8rem">المركز ${num(rowOf(a.id).pos)}</div>` : ''}</div>
       </div>
       <div class="row sp" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
         <div><div class="eyebrow">توقع المحلل (أهداف متوقعة)</div><div style="font-size:1.2rem">${pair(e.xg[0].toFixed(1), e.xg[1].toFixed(1))}</div></div>
@@ -211,6 +215,8 @@
     }
     const lowFit = squad.filter((p) => myT().lineup.includes(p.id) && p.fit < 75);
     if (lowFit.length) alerts.push(`<li class="acc">لياقة منخفضة في التشكيلة: ${lowFit.map((p) => `${esc(shortName(p.name))} ${num(p.fit + '%')}`).join('، ')}</li>`);
+    for (const t of S.talks || []) { const p = S.players[t.pid]; if (p) alerts.unshift(`<li class="acc">${esc(p.name)} ${esc(FM.TALK_REASON[t.reason])} <button class="btn sm" data-a="talk" data-id="${t.id}">افتح المقابلة</button></li>`); }
+    if ((S.jobOffers || []).length && !S.unemployed) alerts.unshift('<li class="good">أندية أخرى تعرض عليك تدريبها <button class="btn sm" data-a="offers">اطّلع على العروض</button></li>');
     if (S.offers.length) alerts.push(`<li class="good">لديك ${num(S.offers.length)} عروض لشراء لاعبين في «الانتقالات»</li>`);
     const ready = S.reports.length && S.reports[0].week === S.week - 1 && S.reports[0].season === S.season;
     if (ready) alerts.push('<li class="good">تقرير كشافة جديد في «الكشافة»</li>');
@@ -325,10 +331,11 @@
   }
 
   // ---------- التكتيك ----------
-  function tacticWarnings(t) {
+  function tacticWarnings(t, team) {
+    team = team || S.userClub;
     const out = [];
     const slots = FM.FORMATIONS[t.formation];
-    const prof = FM.previewProfile(S, S.userClub, t);
+    const prof = FM.previewProfile(S, team, t);
     t.lineup.forEach((id, i) => {
       const p = S.players[id];
       if (!p) { out.push({ c: 'bad', t: `المركز ${slots[i][0]} فارغ` }); return; }
@@ -343,7 +350,7 @@
     if (t.passing === 2 && prof.phyAtt >= 66) out.push({ c: 'good', t: `مهاجموك أقوياء بدنيًا (${Math.round(prof.phyAtt)}): الكرات الطويلة خيار جيد` });
     if (t.line === 2 && prof.defPace >= 72) out.push({ c: 'good', t: `مدافعوك سريعون (${Math.round(prof.defPace)}): يمكنهم اللعب بخط متقدم` });
     if (t.school) out.push({ c: 'acc', t: `${schoolLabel(t.school)} تحتاج: ${FM.SCHOOLS[t.school].needs}` });
-    const fam = S.fam[S.userClub][t.formation];
+    const fam = S.fam[team][t.formation];
     if (fam < 50) out.push({ c: 'acc', t: `الانسجام مع خطة ${t.formation} ضعيف (${Math.round(fam)}%). اختر «الانسجام التكتيكي» في التدريب أو العب بها أكثر` });
     return { list: out, prof };
   }
@@ -374,7 +381,7 @@
         ${Object.keys(FM.TACTIC_KEYS).map((k) => segRow(k, t[k], 'tset')).join('')}
       </section>
       <section class="panel board">
-        <div class="row sp" style="margin-bottom:10px"><h3 style="margin:0">التشكيلة</h3><button class="btn sm" data-a="autoPick">اختيار تلقائي لأفضل تشكيلة</button></div>
+        <div class="row sp" style="margin-bottom:10px"><h3 style="margin:0">التشكيلة</h3><div class="row">${UI.ai.images ? '<label class="btn sm" style="cursor:pointer">حلّل صورة خطة<input type="file" accept="image/*" id="tac-img" hidden></label>' : ''}<button class="btn sm" data-a="autoPick">اختيار تلقائي لأفضل تشكيلة</button></div></div>
         ${tacticPitch(t, c, true)}
         <div class="board-tools"><span class="hint">${sel ? (sel.slot !== undefined ? `اخترت مركز ${role}: انقر لاعبًا من القائمة أو مركزًا آخر للتبديل` : 'انقر مركزًا على الملعب لوضع اللاعب فيه') : 'انقر مركزًا ثم لاعبًا لتغييره. الرقم هو تقييم اللاعب في ذلك المركز.'}</span>${sel ? '<button class="btn sm ghost" data-a="unsel">إلغاء</button>' : ''}</div>
         <div class="stack" style="margin-top:14px"><h3>قوة الخطوط</h3>${profBars.map(([l, v]) => `<div class="attr"><span>${l}</span>${bar(v, 90)}<span class="num">${Math.round(v)}</span></div>`).join('')}</div>
@@ -408,34 +415,35 @@
     return `<div class="cmp"><span class="num">${Math.round(a)}</span><div class="l"><span style="width:${pa}%"></span></div><span class="lbl">${label}</span><div class="r"><span style="width:${pb}%"></span></div><span class="num">${Math.round(b)}</span></div>`;
   }
   function nextOppView() {
-    const f = FM.userFixture(S);
-    if (!f) return '<div class="empty">لا مباراة قادمة</div>';
-    const home = f.h === S.userClub;
+    const ev = S.unemployed ? null : FM.nextEvent(S);
+    if (!ev) return '<div class="empty">لا مباراة قادمة</div>';
+    const f = ev.f, team = ev.me, T = S.tactics[team];
+    const home = f.h === team;
     const oppId = home ? f.a : f.h;
     const opp = FM.club(S, oppId);
-    FM.validateLineup(S, S.userClub, myT());
-    FM.prepareAI(S, oppId, S.userClub);
+    FM.validateLineup(S, team, T);
+    FM.prepareAI(S, oppId, team);
     const ot = S.tactics[oppId];
-    const e = home ? FM.expected(S, S.userClub, myT(), oppId, ot) : FM.expected(S, oppId, ot, S.userClub, myT());
+    const e = home ? FM.expected(S, team, T, oppId, ot) : FM.expected(S, oppId, ot, team, T);
     const u = home ? 0 : 1;
     const P = e.P[u], O = e.P[1 - u];
-    const key = `${S.season}-${S.week}-${JSON.stringify([myT().formation, myT().lineup])}`;
-    if (!UI.recCache || UI.recCache.key !== key) UI.recCache = { key, list: FM.recommend(S, S.userClub, myT(), oppId, ot, home) };
+    const key = `${ev.date}-${oppId}-${JSON.stringify([T.formation, T.lineup])}`;
+    if (!UI.recCache || UI.recCache.key !== key) UI.recCache = { key, list: FM.recommend(S, team, T, oppId, ot, home) };
     const recs = UI.recCache.list;
     const seen = new Set();
     const top = recs.filter((r) => { const k = r.school || r.preset; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4);
-    const current = recs.find((r) => r.formation === myT().formation && (myT().school ? r.school === myT().school : r.preset === myT().preset));
+    const current = recs.find((r) => r.formation === T.formation && (T.school ? r.school === T.school : r.preset === T.preset));
     const sq = FM.squadOf(S, oppId).sort((a, b) => b.ovr - a.ovr);
     const keyP = sq.slice(0, 3);
     const tb = FM.table(S);
     const orow = tb.find((r) => r.id === oppId);
-    const lab = UI.lab && UI.lab.key === key + JSON.stringify(myT()) ? UI.lab : null;
+    const lab = UI.lab && UI.lab.key === key + JSON.stringify(T) ? UI.lab : null;
     const factors = e.factors.slice().sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
     const style = Object.keys(FM.PRESETS).find((k) => k === opp.style);
     return `<div class="grid g-side">
       <div class="stack">
         <section class="panel">
-          <div class="row" style="gap:14px">${crest(opp, 48)}<div><div class="eyebrow">${home ? 'نستقبل' : 'نحل ضيفًا على'}</div><h2>${esc(opp.name)}</h2><div class="row muted" style="font-size:.84rem"><span>المركز ${num(tb.indexOf(orow) + 1)}</span>${formChips(orow.form)}<span>أهداف ${num(orow.gf)} له · ${num(orow.ga)} عليه</span></div></div></div>
+          <div class="row" style="gap:14px">${crest(opp, 48)}<div><div class="eyebrow">${esc(ev.label)} · ${home ? 'نستقبل' : 'نحل ضيفًا على'}</div><h2>${esc(opp.name)}</h2>${orow ? `<div class="row muted" style="font-size:.84rem"><span>المركز ${num(tb.indexOf(orow) + 1)}</span>${formChips(orow.form)}<span>أهداف ${num(orow.gf)} له · ${num(orow.ga)} عليه</span></div>` : ''}</div></div>
           ${S.oppPlan && S.oppPlan.reason && S.oppPlan.key.endsWith('-' + oppId) ? `<div class="pill info" style="margin-top:12px;white-space:normal">${esc(S.oppPlan.reason)}</div>` : ''}
           <div class="grid g2" style="margin-top:16px">
             <div>${tacticPitch(ot, opp, false)}</div>
@@ -585,7 +593,7 @@
   }
   function marketView() {
     const F = UI.filters;
-    const list = Object.values(S.players).filter((p) => p.clubId !== S.userClub && (!p.discovered || S.shortlist.includes(p.id)) && (F.pos === 'all' || p.pos === F.pos) && p.age <= F.age && p.ovr >= F.ovr && (!F.free || !p.clubId) && (!F.price || FM.askingPrice(S, p) <= F.price) && (!F.q || p.name.includes(F.q)));
+    const list = Object.values(S.players).filter((p) => p.clubId !== S.userClub && !(p.clubId || '').startsWith('nt-') && (!p.discovered || S.shortlist.includes(p.id)) && (F.pos === 'all' || p.pos === F.pos) && p.age <= F.age && p.ovr >= F.ovr && (!F.free || !p.clubId) && (!F.price || FM.askingPrice(S, p) <= F.price) && (!F.q || p.name.includes(F.q)));
     list.sort((a, b) => b.ovr - a.ovr || a.age - b.age);
     return `<section class="panel stack">
       <div class="chips">${['all'].concat(FM.POS).map((p) => `<button class="chip ${F.pos === p ? 'on' : ''}" data-a="fpos" data-v="${p}">${p === 'all' ? 'الكل' : p}</button>`).join('')}</div>
@@ -658,8 +666,16 @@
   }
 
   // ---------- الدوري ----------
+  function compTabs() {
+    const cur = UI.leagueTab || FM.userLeague(S).id;
+    const ul = FM.userLeague(S);
+    const leagues = [ul].concat(S.leagues.filter((l) => !l.hidden && l !== ul));
+    const cups = (S.cups || []).slice().sort((a, b) => (b.clubs.includes(S.userClub) ? 1 : 0) - (a.clubs.includes(S.userClub) ? 1 : 0));
+    return `<div class="tabs" style="margin-bottom:6px">${leagues.map((l) => `<button class="${l.id === cur ? 'on' : ''}" data-a="leagueTab" data-v="${l.id}">${esc(l.short)}</button>`).join('')}</div><div class="tabs">${cups.map((c) => `<button class="${'cup:' + c.id === cur ? 'on' : ''}" data-a="leagueTab" data-v="cup:${c.id}">${esc(c.name)}</button>`).join('')}</div>`;
+  }
   function leagueView() {
-    const lid = UI.leagueTab || FM.userLeague(S).id;
+    if (UI.leagueTab && UI.leagueTab.startsWith('cup:')) { const cup = (S.cups || []).find((c) => c.id === UI.leagueTab.slice(4)); if (cup) return compTabs() + cupView(cup); }
+    const lid = UI.leagueTab && FM.leagueOf(S, UI.leagueTab) ? UI.leagueTab : FM.userLeague(S).id;
     const lg = FM.leagueOf(S, lid);
     const tb = FM.table(S, lid);
     const n = tb.length;
@@ -671,7 +687,7 @@
     const scorers = players.filter((p) => p.st.goals).sort((a, b) => b.st.goals - a.st.goals).slice(0, 10);
     const assists = players.filter((p) => p.st.assists).sort((a, b) => b.st.assists - a.st.assists).slice(0, 6);
     const zone = (i) => (i < lg.europe ? 'z-eu' : i >= n - lg.relegate ? 'z-rel' : '');
-    return `<div class="row sp"><h2>${esc(lg.name)}</h2><div class="tabs">${S.leagues.map((l) => `<button class="${l.id === lid ? 'on' : ''}" data-a="leagueTab" data-v="${l.id}">${esc(l.short)}</button>`).join('')}</div></div>
+    return compTabs() + `<div class="row sp"><h2>${esc(lg.name)}</h2></div>
     <div class="grid g-side">
       <section class="panel"><h3>جدول الترتيب <span class="muted">بعد ${num(lg.played)} جولة</span></h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th class="n">#</th><th>النادي</th><th class="n">لعب</th><th class="n">ف</th><th class="n">ت</th><th class="n">خ</th><th class="n">له</th><th class="n">عليه</th><th class="n">±</th><th class="n">نقاط</th><th>آخر 5</th></tr></thead><tbody>${tb.map((row, i) => { const c = FM.club(S, row.id); return `<tr class="${row.id === S.userClub ? 'me' : ''} ${zone(i)}"><td class="n">${i + 1}</td><td><span class="row" style="gap:8px;flex-wrap:nowrap">${crest(c, 18)}${esc(c.name)}</span></td><td class="n">${row.p}</td><td class="n">${row.w}</td><td class="n">${row.d}</td><td class="n">${row.l}</td><td class="n">${row.gf}</td><td class="n">${row.ga}</td><td class="n"><span class="ltr">${row.gf - row.ga > 0 ? '+' : ''}${row.gf - row.ga}</span></td><td class="n"><b>${row.pts}</b></td><td>${formChips(row.form)}</td></tr>`; }).join('')}</tbody></table></div>
         <div class="legend" style="margin-top:10px"><span><i style="background:var(--info)"></i>المراكز القارية (${lg.europe})</span><span><i style="background:var(--bad)"></i>الهبوط (${lg.relegate})</span><span>جائزة البطل والمراكز: ${money(lg.econ.prize * n + lg.econ.champ)} للأول</span></div></section>
@@ -723,20 +739,21 @@
 
   // ---------- قبل المباراة ----------
   function prematchModal() {
-    const f = FM.userFixture(S);
-    const home = f.h === S.userClub;
+    const ev = UI.modal.ev;
+    const f = ev.f;
+    const home = f.h === ev.me;
     const oppId = home ? f.a : f.h;
-    const t = myT();
-    const problems = FM.validateLineup(S, S.userClub, t);
-    FM.prepareAI(S, oppId, S.userClub);
-    const w = tacticWarnings(t).list.filter((x) => x.c === 'bad');
+    const t = S.tactics[ev.me];
+    const problems = FM.validateLineup(S, ev.me, t);
+    FM.prepareAI(S, oppId, ev.me);
+    const w = tacticWarnings(t, ev.me).list.filter((x) => x.c === 'bad');
     const h = FM.club(S, f.h), a = FM.club(S, f.a);
     return `<div class="overlay" data-a="closeBg"><div class="modal" role="dialog" aria-modal="true" aria-label="يوم المباراة">
-      <div class="mh"><h2>يوم المباراة</h2><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
+      <div class="mh"><div><h2>يوم المباراة</h2><div class="muted" style="font-size:.84rem">${esc(ev.label)} · ${fdate(ev.date, true)}</div></div><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
       <div class="mb">
         <div class="fixture"><div class="side">${crest(h, 50)}<div class="nm">${esc(h.name)}</div></div><div class="score muted">ضد</div><div class="side">${crest(a, 50)}<div class="nm">${esc(a.name)}</div></div></div>
         <div class="grid g2">
-          <div>${tacticPitch(t, me(), false)}</div>
+          <div>${tacticPitch(t, FM.club(S, ev.me), false)}</div>
           <div class="stack"><dl class="kv"><dt>الخطة</dt><dd class="num">${t.formation}</dd><dt>الأسلوب</dt><dd>${esc(styleLabel(t))}</dd>${Object.keys(FM.TACTIC_KEYS).map((k) => `<dt>${FM.TACTIC_AR[k]}</dt><dd>${FM.TACTIC_KEYS[k][t[k]]}</dd>`).join('')}<dt>الاحتياط</dt><dd>${t.bench.length} لاعبين</dd></dl>
             ${problems.length || w.length ? `<ul class="warn-list">${problems.map((x) => `<li class="acc">${esc(x)}</li>`).join('')}${w.map((x) => `<li class="bad">${esc(x.t)}</li>`).join('')}</ul>` : '<div class="pill good" style="justify-self:start">التشكيلة جاهزة</div>'}
           </div>
@@ -744,7 +761,8 @@
         <div class="row" style="justify-content:flex-end;border-top:1px solid var(--line);padding-top:14px">
           ${S.oppPlan && S.oppPlan.reason && S.oppPlan.key.endsWith('-' + oppId) ? `<span class="pill info" style="white-space:normal;margin-inline-end:auto">${esc(S.oppPlan.reason)}</span>` : ''}
           ${UI.ai.sample ? '<button class="btn ghost" data-a="aiQuick" data-k="plan">اسأل المساعد الذكي</button>' : ''}
-          <button class="btn ghost" data-a="goTactics">عدّل التكتيك</button>
+          <button class="btn ghost" data-a="press">الندوة الصحفية</button>
+          ${ev.type === 'nt' ? '<button class="btn ghost" data-a="nav" data-v="national">خطة المنتخب</button>' : '<button class="btn ghost" data-a="goTactics">عدّل التكتيك</button>'}
           <button class="btn" data-a="playInstant">النتيجة مباشرة</button>
           <button class="btn pri" data-a="playLive">قُد المباراة من الخط ◂</button>
         </div>
@@ -984,8 +1002,8 @@
     if (!L || UI.view !== 'match') return;
     L.raf = requestAnimationFrame(frame);
     const W = L.world;
-    if (!W.beat && !L.paused) {
-      if (!L.queue.length && !L.m.finished) advanceMinute(L);
+    if (!W.beat && (!L.paused || L.remote)) {
+      if (!L.queue.length && !L.m.finished && !L.remote) advanceMinute(L);
       if (L.queue.length) startBeat(L, L.queue.shift(), now);
     }
     const b = W.beat;
@@ -1004,6 +1022,7 @@
     FM.stepMinute(S, m);
     const tl = m.tl[m.tl.length - 1];
     L.queue = plan(L, tl);
+    if (L.friend) pushHostFrame();
     if (m.minute === 45) { L.queue.push({ kind: 'half', ms: 0 }); L.queue.push(kickoffBeat(m, 1)); }
     const clock = document.getElementById('lv-clock');
     if (clock) clock.textContent = `${m.minute > 90 ? '90+' + (m.minute - 90) : m.minute}'${m.minute <= 45 ? ' · الشوط 1' : ' · الشوط 2'}`;
@@ -1054,24 +1073,30 @@
     el.classList.add('show');
   }
 
-  function startLive(instant) {
-    const f = FM.userFixture(S);
-    const us = f.h === S.userClub ? 0 : 1;
+  function startLive(instant, ev) {
+    const f = ev.f;
+    const us = f.h === ev.me ? 0 : 1;
     const oppId = us === 0 ? f.a : f.h;
-    FM.validateLineup(S, S.userClub, myT());
-    FM.prepareAI(S, oppId, S.userClub);
-    const m = FM.createMatch(S, f.h, f.a, S.tactics[f.h], S.tactics[f.a], { userSide: us, ai: instant ? [true, true] : [us !== 0, us !== 1] });
+    FM.validateLineup(S, ev.me, S.tactics[ev.me]);
+    FM.prepareAI(S, oppId, ev.me);
+    const m = FM.createMatch(S, f.h, f.a, S.tactics[f.h], S.tactics[f.a], { userSide: us, neutral: ev.neutral, ai: instant ? [true, true] : [us !== 0, us !== 1] });
     UI.modal = null;
-    if (instant) { FM.simulate(S, m); finishRound(m); return; }
-    const L = { m, us, speed: 1, paused: false, out: null, inn: null, shown: 0, panel: 'tac', queue: [], kits: kits(FM.club(S, f.h), FM.club(S, f.a)), world: { pos: {}, ball: { x: PW / 2, y: PH / 2 }, carrier: null, beat: null } };
+    if (instant) { FM.simulate(S, m); finishRound(m, ev); return; }
+    beginLive(m, us, ev, {});
+  }
+  function beginLive(m, us, ev, flags) {
+    const h = FM.club(S, m.sides[0].clubId), a = FM.club(S, m.sides[1].clubId);
+    const L = Object.assign({ m, us, ev, speed: 1, paused: false, out: null, inn: null, shown: 0, panel: 'tac', queue: [], dialect: 'fusha', aiComm: false, kits: kits(h, a), world: { pos: {}, ball: { x: PW / 2, y: PH / 2 }, carrier: null, beat: null } }, flags);
     const ko = kickoffBeat(m, 0);
     const t0 = shapeTargets(m, ko.ball, 0);
     for (const [k, sd] of m.sides.entries()) for (const e of sd.on) { const t = toTeam(k, t0[e.id].x, t0[e.id].y); L.world.pos[e.id] = toPitch(k, Math.min(t.d, 46), t.w); }
     if (ko.holder) { L.world.pos[ko.holder] = { x: PW / 2 + 0.9, y: PH / 2 }; L.world.carrier = ko.holder; }
     UI.match = L;
+    UI.modal = null;
     UI.view = 'match';
     render();
   }
+
   // ملعب بأبعاد حقيقية: خط المرمى عند 0 و105 م، المنطقة 16.5 م، نقطة الجزاء 11 م، الدائرة 9.15 م
   function livePitch() {
     const L = (x1, y1, x2, y2) => `<line class="pl" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
@@ -1094,14 +1119,13 @@
     const L = UI.match;
     const m = L.m;
     const h = FM.club(S, m.sides[0].clubId), a = FM.club(S, m.sides[1].clubId);
-    const lg = FM.clubLeague(S, h.id);
     return `<div class="stack">
       <div class="scoreboard">
         <div class="tm">${crest(h, 40)}<span class="nm">${esc(h.name)}</span></div>
         <div class="sc"><div class="g" id="lv-score">${pair(m.sides[0].goals, m.sides[1].goals)}</div><div class="clock" id="lv-clock">${m.minute}'</div></div>
         <div class="tm away">${crest(a, 40)}<span class="nm">${esc(a.name)}</span></div>
       </div>
-      <div class="muted" style="text-align:center;font-size:.8rem;margin-top:-6px">${esc(lg.name)} · الجولة ${num(S.week + 1)} · ${esc(h.stadium)} · ${fdate(FM.fixtureDate(S), true)}</div>
+      <div class="muted" style="text-align:center;font-size:.8rem;margin-top:-6px">${esc(L.ev.label)} · ${L.ev.neutral ? 'ملعب محايد' : esc(h.stadium)}${L.ev.date ? ' · ' + fdate(L.ev.date, true) : ''}</div>
       <div class="live-grid">
         <div class="stack">
           <div class="panel" style="padding:10px"><div class="pitch-wrap"><svg class="pitch live" viewBox="-3 -2.5 111 73" role="img" aria-label="الملعب المباشر" style="direction:ltr"><rect x="-3" y="-2.5" width="111" height="73" class="apron"/>${livePitch()}${goalNets()}<line id="lv-trail" class="trail" x1="0" y1="0" x2="0" y2="0"/><g id="lv-dots"></g><ellipse id="lv-shadow" class="bshadow" rx="0.75" ry="0.38"/><g id="lv-ball"><circle r="0.75" class="ballc"/></g><text id="lv-name" class="pname"></text></svg><div id="lv-cap" class="cap"></div><div id="lv-flash"></div></div>
@@ -1138,7 +1162,9 @@
     document.getElementById('lv-stats').innerHTML = `<h3>الإحصاءات</h3>${rows.map(([l, x, y]) => `<div class="stat-row"><span class="num">${x}</span><span class="lbl">${l}</span><span class="num">${y}</span></div>`).join('')}`;
     if (m.events.length !== L.shown) {
       L.shown = m.events.length;
-      document.getElementById('lv-feed').innerHTML = m.events.slice().reverse().map((e) => `<div class="e ${e.type}"><span class="m">${e.min}'</span><span>${esc(e.text)}</span></div>`).join('');
+      document.getElementById('lv-feed').innerHTML = m.events.slice().reverse().map((e) => `<div class="e ${e.type} ${L.aiComm && e.ai ? 'ai' : ''}"><span class="m">${e.min}'</span><span>${esc(commentText(L, e))}</span></div>`).join('');
+      for (const e of m.events.slice(L.aiSeen || 0)) aiComment(L, e);
+      L.aiSeen = m.events.length;
     }
     if (m.finished || scored) renderMatchControls();
   }
@@ -1148,7 +1174,7 @@
     if (!box) return;
     const m = L.m, sd = m.sides[L.us];
     if (m.finished) {
-      box.innerHTML = `<div class="row sp"><div><h3>انتهت المباراة</h3><div class="muted">${esc(m.names[0])} ${m.sides[0].goals} – ${m.sides[1].goals} ${esc(m.names[1])}</div></div><button class="btn pri" data-a="mFinish">تقرير المباراة ونتائج الجولة ◂</button></div>`;
+      box.innerHTML = `<div class="row sp"><div><h3>انتهت المباراة</h3><div class="muted">${esc(m.names[0])} ${pair(m.sides[0].goals, m.sides[1].goals)} ${esc(m.names[1])}</div></div>${L.friend || L.remote ? '<button class="btn pri" data-a="frLeave">إنهاء المباراة الودية</button>' : '<button class="btn pri" data-a="mFinish">تقرير المباراة ونتائج اليوم ◂</button>'}</div>`;
       return;
     }
     const speedBtns = [['1', '×1'], ['2', '×2'], ['3', '×4']].map(([v, l]) => `<button class="${L.speed === +v ? 'on' : ''}" data-a="mSpeed" data-v="${v}">${l}</button>`).join('');
@@ -1164,17 +1190,20 @@
         </div>`;
       }
     }
-    box.innerHTML = `<div class="row sp"><div class="row"><button class="btn ${L.paused ? 'pri' : ''}" data-a="mPause">${L.paused ? '▸ استئناف' : '❚❚ إيقاف وتعديل'}</button><div class="seg" aria-label="السرعة">${speedBtns}</div></div><button class="btn ghost sm" data-a="mSkip">أكمل المباراة فورًا</button></div>
+    const commRow = `<div class="row" style="margin-top:10px;gap:8px"><span class="muted" style="font-size:.8rem">التعليق</span><div class="seg"><button class="${L.dialect === 'fusha' ? 'on' : ''}" data-a="mDialect" data-v="fusha">فصحى</button><button class="${L.dialect === 'darija' ? 'on' : ''}" data-a="mDialect" data-v="darija">دارجة</button></div>${UI.ai.sample ? `<button class="ibtn ${L.aiComm ? 'on' : ''}" data-a="mAiComm">معلق ذكي ${L.aiComm ? 'مفعّل' : ''}</button>` : ''}</div>`;
+    if (L.remote) L.paused = !!L.guestPanel;
+    box.innerHTML = `<div class="row sp"><div class="row">${L.remote ? `<button class="btn ${L.guestPanel ? 'pri' : ''}" data-a="mGuestPanel">${L.guestPanel ? 'أخفِ التعديلات' : 'الخطة والتبديلات'}</button>` : `<button class="btn ${L.paused ? 'pri' : ''}" data-a="mPause">${L.paused ? '▸ استئناف' : '❚❚ إيقاف وتعديل'}</button><div class="seg" aria-label="السرعة">${speedBtns}</div>`}</div>${L.friend || L.remote ? '' : '<button class="btn ghost sm" data-a="mSkip">أكمل المباراة فورًا</button>'}</div>${commRow}
       ${L.note && L.paused ? `<div class="pill acc" style="margin-top:10px;white-space:normal">${esc(L.note)}</div>` : ''}
       ${L.paused ? `<div class="tabs" style="margin-top:12px"><button class="${L.panel === 'tac' ? 'on' : ''}" data-a="mPanel" data-v="tac">التعليمات</button><button class="${L.panel === 'sub' ? 'on' : ''}" data-a="mPanel" data-v="sub">التبديلات</button></div>${panel}` : '<div class="hint" style="margin-top:8px">أوقف المباراة لتغيير التعليمات أو إجراء تبديل. نسبة اللياقة تظهر عند التبديل.</div>'}`;
   }
-  function finishRound(m) {
-    FM.playRound(S, m);
+  function finishRound(m, ev) {
+    FM.playEvent(S, ev, m);
     UI.match = null;
     UI.lab = null;
     UI.recCache = null;
     UI.round = null;
-    if (S.seasonEnd && (S.week === 0 || S.gameOver)) UI.modal = { type: 'season' };
+    if (S.seasonEnd && !S.seasonEnd.seen) UI.modal = { type: 'season' };
+    else if (S.unemployed) UI.modal = { type: 'offers' };
     UI.view = 'analysis';
     UI.tab.analysis = 'last';
     save();
@@ -1186,13 +1215,14 @@
     const E = S.seasonEnd;
     const youth = (E.youth || []).map((id) => S.players[id]).filter(Boolean);
     return `<div class="overlay"><div class="modal" role="dialog" aria-modal="true" aria-label="نهاية الموسم">
-      <div class="mh"><h2>${S.gameOver ? 'نهاية المسيرة' : 'نهاية موسم ' + esc(E.label || '')}</h2></div>
+      <div class="mh"><h2>${S.unemployed ? 'نهاية المهمة' : 'نهاية موسم ' + esc(E.label || '')}</h2></div>
       <div class="mb">
         <div class="grid g3"><div><div class="eyebrow">مركزنا</div><div class="big">${E.pos}</div><div class="muted">الهدف كان ${E.target}</div></div><div><div class="eyebrow">البطل</div><h3>${esc(E.champ)}</h3></div><div><div class="eyebrow">جائزة المركز</div><div class="big" style="font-size:1.5rem">${$m(E.prize)}</div></div></div>
         <div class="pill ${E.pos <= E.target ? 'good' : 'bad'}" style="justify-self:start;white-space:normal">${esc(E.verdict)}</div>
+        ${(S.trophies || []).filter((t) => t.year === E.label).length ? `<div class="row">${S.trophies.filter((t) => t.year === E.label).map((t) => `<span class="pill acc">🏆 ${esc(t.name)}</span>`).join('')}</div>` : ''}
         <dl class="kv">${(E.others || []).map((o) => `<dt>بطل ${esc(o.league)}</dt><dd>${esc(o.champ)}</dd>`).join('')}<dt>هدّاف الدوري</dt><dd>${E.scorer ? `${esc(E.scorer.name)} (${esc(E.scorer.club)}) · ${num(E.scorer.goals)} هدفًا` : '—'}</dd><dt>أفضل لاعب</dt><dd>${E.best ? `${esc(E.best.name)} · ${num(E.best.avg)}` : '—'}</dd>${E.retired && E.retired.length ? `<dt>اعتزلوا</dt><dd>${esc(E.retired.join('، '))}</dd>` : ''}${E.left && E.left.length ? `<dt>غادروا بنهاية العقد</dt><dd>${esc(E.left.join('، '))}</dd>` : ''}</dl>
         ${youth.length ? `<div class="stack"><h3>دفعة أكاديمية الشباب</h3>${youth.map((p) => `<div class="row sp" data-a="player" data-id="${p.id}" style="cursor:pointer"><span>${pos(p.pos)} ${esc(p.name)} <span class="muted">${p.age} سنة</span></span><span class="row">${ovr(p.ovr)}${potStars(p)}</span></div>`).join('')}</div>` : ''}
-        <div class="row" style="justify-content:flex-end">${S.gameOver ? '<button class="btn pri" data-a="newCareer">مسيرة جديدة</button>' : `<button class="btn pri" data-a="seasonGo">ابدأ موسم ${S.year}/${S.year + 1}</button>`}</div>
+        <div class="row" style="justify-content:flex-end">${S.unemployed ? '<button class="btn pri" data-a="seasonGo">اطّلع على عروض التدريب</button>' : `${(S.jobOffers || []).length ? '<span class="pill good">أندية أخرى تريدك</span>' : ''}<button class="btn pri" data-a="seasonGo">ابدأ موسم ${S.year}/${S.year + 1}</button>`}</div>
       </div></div></div>`;
   }
 
@@ -1203,7 +1233,8 @@
     const fid = active && active.id && active.tagName === 'INPUT' ? active.id : null;
     const caret = fid ? active.selectionStart : null;
     let html;
-    if (!S || UI.view === 'start') html = startView();
+    if (UI.view === 'friend' && !S && !UI.match) html = `<main class="wrap" style="padding-block:20px">${friendView()}<button class="btn ghost" data-a="nav" data-v="start" style="margin-top:14px">رجوع</button></main>`;
+    else if (!S || UI.view === 'start') html = startView();
     else {
       let body;
       switch (UI.view) {
@@ -1217,14 +1248,22 @@
         case 'finance': body = financeView(); break;
         case 'inbox': body = inboxView(); break;
         case 'ai': body = aiView(); break;
+        case 'national': body = ntView(); break;
+        case 'paper': body = paperView(); break;
+        case 'friend': body = friendView(); break;
         case 'match': body = matchView(); break;
         default: body = homeView();
       }
-      html = header() + `<main class="wrap">${body}</main>`;
+      const friendMode = UI.match && (UI.match.friend || UI.match.remote);
+      html = (friendMode ? '' : header()) + `<main class="wrap">${body}</main>`;
       if (UI.modal) {
         if (UI.modal.type === 'player') html += playerModal(UI.modal.id);
         else if (UI.modal.type === 'prematch') html += prematchModal();
         else if (UI.modal.type === 'season') html += seasonModal();
+        else if (UI.modal.type === 'talk') html += talkModal();
+        else if (UI.modal.type === 'press') html += pressModal();
+        else if (UI.modal.type === 'offers') html += offersModal();
+        else if (UI.modal.type === 'img') html += imgModal();
       }
     }
     if (UI.toast) html += `<div class="toast ${UI.toast.bad ? 'bad' : ''}" role="status">${esc(UI.toast.text)}</div>`;
@@ -1257,14 +1296,15 @@
     },
     continue: () => { S = loadSave(); if (S) { UI.view = 'home'; render(); } },
     next: () => {
-      if (S.gameOver) { UI.modal = { type: 'season' }; render(); return; }
-      if (!FM.userFixture(S)) return;
-      UI.modal = { type: 'prematch' };
+      if (S.unemployed) { UI.modal = { type: 'offers' }; render(); return; }
+      const ev = FM.nextEvent(S);
+      if (!ev) return;
+      UI.modal = { type: 'prematch', ev };
       render();
     },
     goTactics: () => { UI.modal = null; UI.view = 'tactics'; render(); },
-    playLive: () => startLive(false),
-    playInstant: () => startLive(true),
+    playLive: () => startLive(false, UI.modal.ev),
+    playInstant: () => startLive(true, UI.modal.ev),
     close: () => { UI.modal = null; UI.confirm = null; UI.offerMsg = null; render(); },
     closeBg: (d, el, e) => { if (e.target === el) A.close(); },
     player: (d) => { UI.modal = { type: 'player', id: d.id }; UI.confirm = null; UI.offerMsg = null; render(); },
@@ -1338,15 +1378,16 @@
     leagueTab: (d) => { UI.leagueTab = d.v; UI.round = null; render(); },
     // التحليل
     runLab: () => {
-      const f = FM.userFixture(S);
-      if (!f) return;
+      const ev = FM.nextEvent(S);
+      if (!ev) return;
       UI.labBusy = true; render();
       setTimeout(() => {
-        const home = f.h === S.userClub;
-        const oppId = home ? f.a : f.h;
-        const key = `${S.season}-${S.week}-${JSON.stringify([myT().formation, myT().lineup])}` + JSON.stringify(myT());
-        const r = home ? FM.monteCarlo(S, S.userClub, myT(), oppId, S.tactics[oppId], 200) : FM.monteCarlo(S, oppId, S.tactics[oppId], S.userClub, myT(), 200);
-        if (!home) { const t = r.w; r.w = r.l; r.l = t; [r.gf, r.ga] = [r.ga, r.gf]; [r.xgf, r.xga] = [r.xga, r.xgf]; r.top = r.top.map(([s, n]) => [s.split('-').reverse().join('-'), n]); }
+        const team = ev.me, T = S.tactics[team];
+        const home = ev.f.h === team;
+        const oppId = home ? ev.f.a : ev.f.h;
+        const key = `${ev.date}-${oppId}-${JSON.stringify([T.formation, T.lineup])}` + JSON.stringify(T);
+        const r = home ? FM.monteCarlo(S, team, T, oppId, S.tactics[oppId], 200) : FM.monteCarlo(S, oppId, S.tactics[oppId], team, T, 200);
+        if (!home) { const t = r.w; r.w = r.l; r.l = t; [r.gf, r.ga] = [r.ga, r.gf]; [r.xgf, r.xga] = [r.xga, r.xgf]; r.top = r.top.map(([sc, n]) => [sc.split('-').reverse().join('-'), n]); }
         UI.lab = { key, res: r };
         UI.labBusy = false;
         render();
@@ -1366,17 +1407,18 @@
     mPause: () => { const L = UI.match; L.paused = !L.paused; if (!L.paused) L.note = null; renderMatchControls(); },
     mSpeed: (d) => { UI.match.speed = +d.v; renderMatchControls(); },
     mPanel: (d) => { UI.match.panel = d.v; renderMatchControls(); },
-    mTac: (d) => { const L = UI.match; L.m.sides[L.us].tactic[d.k] = +d.v; FM.refresh(S, L.m); L.m.events.push({ min: L.m.minute, type: 'tactic', side: L.us, text: `${L.m.names[L.us]}: ${FM.TACTIC_AR[d.k]} ← ${FM.TACTIC_KEYS[d.k][+d.v]}` }); updateHud(false); renderMatchControls(); },
+    mTac: (d) => { const L = UI.match; if (L.remote) sendGuestCmd({ tac: { [d.k]: +d.v } }); L.m.sides[L.us].tactic[d.k] = +d.v; FM.refresh(S, L.m); L.m.events.push({ min: L.m.minute, type: 'tactic', side: L.us, text: `${L.m.names[L.us]}: ${FM.TACTIC_AR[d.k]} ← ${FM.TACTIC_KEYS[d.k][+d.v]}` }); updateHud(false); renderMatchControls(); },
     mOut: (d) => { UI.match.out = d.id; renderMatchControls(); },
     mIn: (d) => { UI.match.inn = d.id; renderMatchControls(); },
-    mSub: () => { const L = UI.match; const err = FM.substitute(S, L.m, L.us, L.out, L.inn); if (err) toast(err, true); L.out = null; L.inn = null; render(); },
+    mSub: () => { const L = UI.match; if (L.remote) { sendGuestCmd({ sub: [L.out, L.inn] }); L.m.sides[L.us].bench = L.m.sides[L.us].bench.filter((x) => x !== L.inn); L.m.sides[L.us].subs++; L.out = null; L.inn = null; renderMatchControls(); return; } const err = FM.substitute(S, L.m, L.us, L.out, L.inn); if (err) toast(err, true); L.out = null; L.inn = null; render(); },
     mSkip: () => { const L = UI.match; L.queue = []; L.world.beat = null; L.m.ai[L.us] = true; FM.simulate(S, L.m); L.paused = false; updateHud(false); renderMatchControls(); },
-    mFinish: () => { cancelAnimationFrame(UI.match.raf); finishRound(UI.match.m); },
+    mFinish: () => { cancelAnimationFrame(UI.match.raf); finishRound(UI.match.m, UI.match.ev); },
+    mGuestPanel: () => { UI.match.guestPanel = !UI.match.guestPanel; renderMatchControls(); },
     aiQuick: (d) => { const q = AI_PROMPTS.find((x) => x[0] === d.k); UI.modal = null; UI.view = 'ai'; render(); if (q) aiSend(q[2]); },
     aiStop: () => { if (UI.ai.ctl) UI.ai.ctl.abort(); },
     aiUndo: () => { if (UI.ai.undo) { Object.assign(myT(), UI.ai.undo); UI.ai.undo = null; save(); toast('أُعيدت خطتك السابقة'); } },
     aiClear: () => { UI.ai.turns = []; S.aiTurns = []; UI.ai.error = null; save(); render(); },
-    seasonGo: () => { S.seasonEnd = null; UI.modal = null; UI.view = 'home'; save(); render(); },
+    seasonGo: () => { if (S.seasonEnd) S.seasonEnd.seen = true; if (S.unemployed || (S.jobOffers || []).length) { UI.modal = { type: 'offers' }; save(); render(); return; } S.seasonEnd = null; UI.modal = null; UI.view = 'home'; save(); render(); },
     newCareer: () => { clearSave(); S = null; UI.modal = null; UI.view = 'start'; render(); },
   };
   function matchPreset(t) {
@@ -1432,7 +1474,7 @@
     if (el.dataset && el.dataset.c === 'fq') { clearTimeout(C.fqT); C.fqT = setTimeout(() => C.fq(el.value), 250); }
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && UI.modal && UI.modal.type !== 'season') A.close();
+    if (e.key === 'Escape' && UI.modal && UI.modal.type !== 'season' && !(UI.modal.type === 'offers' && S && S.unemployed)) A.close();
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('g.tok')) { e.preventDefault(); A.slot(e.target.dataset); }
   });
 
@@ -1481,7 +1523,7 @@
   if (window.claude && window.claude.use) {
     window.claude.use('sample').then(async (s) => {
       UI.ai.sample = s;
-      if (s) { try { const lim = await s.limits(); UI.ai.tools = !!(lim && lim.tools); } catch { UI.ai.tools = false; } }
+      if (s) { try { const lim = await s.limits(); UI.ai.tools = !!(lim && lim.tools); UI.ai.images = !!(lim && lim.images); } catch { UI.ai.tools = false; } }
       if (UI.view === 'ai') render();
     });
   } else UI.ai.sample = null;
@@ -1495,9 +1537,10 @@
   ];
   function aiRules() {
     const c = me(), lg = FM.userLeague(S);
-    const f = FM.userFixture(S);
-    const opp = f ? FM.club(S, f.h === S.userClub ? f.a : f.h) : null;
-    return `أنت مساعد المدرب ومحلل الأداء في لعبة «دكّة المدرب» لإدارة كرة القدم. المدرب الذي تحدّثه هو ${S.manager}، مدرب ${c.name} في ${lg.name}، موسم ${S.year}/${S.year + 1}، قبل الجولة ${S.week + 1} من ${lg.fixtures.length}. المركز الحالي ${FM.position(S, c.id)}، هدف المجلس: ${FM.targetText(S)}، الرصيد ${money(c.budget)}${opp ? `، المباراة القادمة ضد ${opp.name} ${f.h === S.userClub ? 'على أرضنا' : 'خارج أرضنا'} يوم ${FM.fixtureDate(S)}` : ''}.
+    const nev = FM.nextEvent(S);
+    const f = nev && nev.f;
+    const opp = f ? FM.club(S, f.h === nev.me ? f.a : f.h) : null;
+    return `أنت مساعد المدرب ومحلل الأداء في لعبة «دكّة المدرب» لإدارة كرة القدم. المدرب الذي تحدّثه هو ${S.manager}، مدرب ${c.name} في ${lg.name}، موسم ${S.year}/${S.year + 1}، قبل الجولة ${S.week + 1} من ${lg.fixtures.length}. المركز الحالي ${FM.position(S, c.id)}، هدف المجلس: ${FM.targetText(S)}، الرصيد ${money(c.budget)}${opp ? `، المباراة القادمة (${nev.label}) ضد ${opp.name} ${f.h === nev.me ? 'على أرضنا' : 'خارج أرضنا'} يوم ${nev.date}` : ''}.
 القواعد:
 - أجب بالعربية، باختصار ووضوح، بنقاط عملية. لا مقدمات طويلة.
 - استند فقط إلى ما تعيده الأدوات. لا تخترع لاعبين أو أرقامًا.
@@ -1511,17 +1554,18 @@
     return { id: p.id, name: p.name, pos: p.pos, alt: p.alt, age: p.age, ovr: p.ovr, potential_stars: r[0] === r[1] ? r[0] : `${r[0]}-${r[1]}`, fitness: p.fit, morale: Math.round(p.morale), form: p.form.length ? +avgForm(p) : null, goals: p.st.goals, assists: p.st.assists, value_eur: p.value, wage_eur_week: p.wage, contract_years: p.contract, injured_weeks: p.inj || 0, suspended: !!p.susp, generated: !!p.gen };
   };
   function nextMatchData() {
-    const f = FM.userFixture(S);
-    if (!f) return { none: true };
-    const home = f.h === S.userClub, oppId = home ? f.a : f.h, opp = FM.club(S, oppId);
-    FM.validateLineup(S, S.userClub, myT());
-    FM.prepareAI(S, oppId, S.userClub);
+    const nev = FM.nextEvent(S);
+    if (!nev) return { none: true };
+    const f = nev.f, team = nev.me, T = S.tactics[team];
+    const home = f.h === team, oppId = home ? f.a : f.h, opp = FM.club(S, oppId);
+    FM.validateLineup(S, team, T);
+    FM.prepareAI(S, oppId, team);
     const ot = S.tactics[oppId];
-    const e = home ? FM.expected(S, S.userClub, myT(), oppId, ot) : FM.expected(S, oppId, ot, S.userClub, myT());
+    const e = home ? FM.expected(S, team, T, oppId, ot) : FM.expected(S, oppId, ot, team, T);
     const u = home ? 0 : 1, r = (o) => Object.fromEntries(['att', 'mid', 'def', 'gk', 'pace', 'defPace', 'passQ', 'phyAtt', 'phyDef', 'wide', 'fullback', 'avgFit'].map((k) => [k, Math.round(o[k])]));
     const row = FM.table(S).findIndex((x) => x.id === oppId) + 1;
     return {
-      date: FM.fixtureDate(S), venue: home ? `home, ${me().stadium}` : `away, ${opp.stadium}`, opponent: opp.name, opponent_position: row,
+      competition: nev.label, date: nev.date, venue: home ? `home, ${FM.club(S, team).stadium}` : `away, ${opp.stadium}`, opponent: opp.name, opponent_position: row,
       opponent_plan: { formation: ot.formation, school: ot.school, instructions: Object.fromEntries(Object.keys(FM.TACTIC_KEYS).map((k) => [k, ot[k]])), scouting_note: S.oppPlan && S.oppPlan.reason },
       opponent_key_players: FM.squadOf(S, oppId).sort((a, b) => b.ovr - a.ovr).slice(0, 5).map((p) => ({ name: p.name, pos: p.pos, ovr: p.ovr, pace: p.a.pac, goals: p.st.goals })),
       strength_us: r(e.P[u]), strength_them: r(e.P[1 - u]), expected_possession_us: Math.round(e.share[u] * 100), expected_goals: { us: +e.xg[u].toFixed(2), them: +e.xg[1 - u].toFixed(2) },
@@ -1554,9 +1598,10 @@
       { name: 'simulate', description: 'Plays the next match 150 times with a candidate plan for us against the opponent expected plan and returns win/draw/loss percentages, average score and xG. Picks the best XI automatically when the formation changes. Changes nothing.', inputSchema: PLAN_SCHEMA, execute: (input) => {
         const t = planFrom(input || {});
         aiActivity(`يجرّب في المحاكي: ${t.formation}${t.school ? ' · ' + FM.SCHOOLS[t.school].coach : ''}`);
-        const f = FM.userFixture(S);
-        if (!f) throw new Error('لا مباراة قادمة');
-        const home = f.h === S.userClub, oppId = home ? f.a : f.h;
+        const nev = FM.nextEvent(S);
+        if (!nev) throw new Error('لا مباراة قادمة');
+        if (nev.me !== S.userClub) throw new Error('المباراة القادمة للمنتخب: عدّل خطته من صفحة المنتخب');
+        const f = nev.f, home = f.h === S.userClub, oppId = home ? f.a : f.h;
         FM.prepareAI(S, oppId, S.userClub);
         const r = home ? FM.monteCarlo(S, S.userClub, t, oppId, S.tactics[oppId], 150) : FM.monteCarlo(S, oppId, S.tactics[oppId], S.userClub, t, 150);
         const w = home ? r.w : r.l, l = home ? r.l : r.w;
@@ -1582,7 +1627,7 @@
         const i = input || {};
         aiActivity(`يبحث في السوق${i.position ? ': ' + i.position : ''}`);
         const maxP = i.max_price ? +i.max_price : me().budget;
-        return Object.values(S.players).filter((p) => p.clubId !== S.userClub && !p.discovered && (!i.position || p.pos === i.position) && (!i.max_age || p.age <= +i.max_age) && (!i.min_ovr || p.ovr >= +i.min_ovr) && FM.askingPrice(S, p) <= maxP)
+        return Object.values(S.players).filter((p) => p.clubId !== S.userClub && !(p.clubId || '').startsWith('nt-') && !p.discovered && (!i.position || p.pos === i.position) && (!i.max_age || p.age <= +i.max_age) && (!i.min_ovr || p.ovr >= +i.min_ovr) && FM.askingPrice(S, p) <= maxP)
           .sort((a, b) => b.ovr - a.ovr || a.age - b.age).slice(0, 8)
           .map((p) => Object.assign(brief(p), { club: p.clubId ? FM.club(S, p.clubId).name : 'free agent', asking_price: FM.askingPrice(S, p), wage_demand: FM.wageDemand(S, p) }));
       } },
@@ -1648,6 +1693,392 @@
       </div>
     </div>`;
   }
+
+  // ---------- المسابقات: الكؤوس ----------
+  function cupView(cup) {
+    const nameOf = (id) => (id ? esc(FM.club(S, id).short) : '—');
+    return `<div class="row sp"><h2>${esc(cup.name)}</h2><span class="muted">${cup.done ? `البطل: <b class="acc">${esc(FM.club(S, cup.winner).name)}</b>` : `الدور الحالي: ${esc(cup.rounds[cup.cur].name)}`} · الجائزة ${$m(cup.prize)}</span></div>
+      <div class="bracket">${cup.rounds.map((r, i) => `<section class="panel"><h3>${esc(r.name)} <span class="muted">${r.dates.map((d) => fdate(d)).join(' · ')}</span></h3>${i > cup.cur && !cup.done ? '<div class="muted" style="font-size:.84rem">تُجرى القرعة بعد الدور السابق</div>' : r.ties.map((t) => {
+        const mine = t.h === S.userClub || t.a === S.userClub;
+        if (!t.a) return `<div class="tie ${mine ? 'me' : ''}"><span>${nameOf(t.h)}</span><span class="muted">إعفاء</span><span></span></div>`;
+        const res = t.m.map((x) => (x.hg === null ? '' : pair(x.h === t.h ? x.hg : x.ag, x.h === t.h ? x.ag : x.hg, ':'))).filter(Boolean).join(' ');
+        return `<div class="tie ${mine ? 'me' : ''}"><span class="${t.w === t.h ? 'won' : ''}">${nameOf(t.h)}</span><b>${res || '–'}${t.pen ? ` <span class="muted">(ترجيح ${pair(t.pen[0], t.pen[1], '-')})</span>` : ''}</b><span class="${t.w === t.a ? 'won' : ''}" style="text-align:left">${nameOf(t.a)}</span></div>`;
+      }).join('')}</section>`).join('')}</div>`;
+  }
+
+  // ---------- المنتخب ----------
+  function ntView() {
+    const nt = S.nt;
+    const T = S.tactics['nt-alg'];
+    const sq = FM.squadOf(S, 'nt-alg').sort((a, b) => ROLE_ORDER[a.pos] - ROLE_ORDER[b.pos] || b.ovr - a.ovr);
+    const alg = FM.club(S, 'nt-alg');
+    const tb = nt.group ? FM.ntTable(S) : null;
+    const offer = !nt.active ? `<section class="panel stack"><h3>عرض من الاتحادية الجزائرية</h3><p style="margin:0">الاتحادية تعرض عليك تدريب المنتخب الوطني بالتوازي مع ناديك. ستقود الخضر في ${esc(nt.name)} بالتشكيلة الحقيقية لكأس العالم 2026.</p><button class="btn pri" data-a="ntAccept" style="justify-self:start">اقبل تدريب الخضر</button></section>` : '';
+    return `<div class="row sp"><div class="row">${crest(alg, 40)}<div><h2>المنتخب الجزائري</h2><div class="muted" style="font-size:.84rem">${esc(nt.name)}${nt.active ? ` · ثقة الاتحادية ${num(nt.conf + '%')}` : ''}</div></div></div>${nt.active ? '<button class="btn sm ghost" data-a="ntLeave">استقل من المنتخب</button>' : ''}</div>
+    ${offer}
+    <div class="grid g-side">
+      <div class="stack">
+        ${nt.active ? `<section class="panel stack"><div class="row sp"><h3 style="margin:0">خطة المنتخب</h3><button class="btn sm" data-a="ntAuto">اختيار تلقائي</button></div>
+          <div class="chips">${Object.keys(FM.FORMATIONS).map((f) => `<button class="chip ${T.formation === f ? 'on' : ''}" data-a="ntForm" data-v="${f}">${f}</button>`).join('')}</div>
+          <div class="chips">${Object.keys(FM.SCHOOLS).map((k) => `<button class="chip txt ${T.school === k ? 'on' : ''}" data-a="ntSchool" data-v="${k}">${esc(FM.SCHOOLS[k].coach)}</button>`).join('')}</div>
+          <div class="grid g2"><div>${tacticPitch(T, alg, false)}</div><div class="stack">${Object.keys(FM.TACTIC_KEYS).map((k) => segRow(k, T[k], 'ntSet')).join('')}</div></div></section>` : ''}
+        <section class="panel"><h3>اللاعبون <span class="muted">قائمة كأس العالم 2026</span></h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>المركز</th><th>اللاعب</th><th class="n">العمر</th><th class="n">التقييم</th><th>اللياقة</th><th></th></tr></thead><tbody>${sq.map((p) => `<tr><td>${pos(p.pos)}</td><td class="nm">${esc(p.name)}${p.gen ? GEN : ''}</td><td class="n">${p.age}</td><td class="n">${ovr(p.ovr)}</td><td style="min-width:70px">${bar(p.fit)}</td><td>${T.lineup.includes(p.id) ? '<span class="pill acc">أساسي</span>' : ''}</td></tr>`).join('')}</tbody></table></div></section>
+      </div>
+      <div class="stack">
+        ${tb ? `<section class="panel"><h3>ترتيب المجموعة</h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>المنتخب</th><th class="n">لعب</th><th class="n">±</th><th class="n">نقاط</th></tr></thead><tbody>${tb.map((r, i) => `<tr class="${r.id === 'nt-alg' ? 'me' : ''} ${i < 2 ? 'z-eu' : ''}"><td>${esc(FM.club(S, r.id).short)}</td><td class="n">${r.p}</td><td class="n"><span class="ltr">${r.gf - r.ga}</span></td><td class="n"><b>${r.pts}</b></td></tr>`).join('')}</tbody></table></div><div class="muted" style="font-size:.78rem;margin-top:8px">الأول والثاني يتأهلان إلى كأس أفريقيا 2027.</div></section>` : ''}
+        <section class="panel"><h3>المباريات</h3>${nt.fixtures.map((f) => `<div class="tie ${f.h === 'nt-alg' || f.a === 'nt-alg' ? 'me' : ''}"><span>${esc(FM.club(S, f.h).short)}</span><b>${f.hg === null ? `<span class="muted" style="font-weight:400;font-size:.78rem">${fdate(f.date)}</span>` : pair(f.hg, f.ag, ':')}</b><span style="text-align:left">${esc(FM.club(S, f.a).short)}</span></div>`).join('')}</section>
+      </div>
+    </div>`;
+  }
+
+  // ---------- الصحيفة ----------
+  function paperView() {
+    const list = S.papers || [];
+    const i = Math.min(UI.paperIdx || 0, Math.max(0, list.length - 1));
+    const P = list[i];
+    if (!P) return '<div class="empty">يصدر العدد الأول بعد مباراتك الأولى.</div>';
+    return `<div class="row sp"><div class="row"><button class="btn sm" data-a="paperIdx" data-v="${i + 1}" ${i >= list.length - 1 ? 'disabled' : ''}>▸ العدد السابق</button><button class="btn sm" data-a="paperIdx" data-v="${i - 1}" ${i <= 0 ? 'disabled' : ''}>العدد التالي ◂</button></div>${UI.ai.sample ? `<button class="btn ${P.ai ? '' : 'pri'}" data-a="paperAI" ${UI.paperBusy ? 'disabled' : ''}>${UI.paperBusy ? 'يكتب المحرر…' : P.ai ? 'أعد كتابة العدد بالذكاء الاصطناعي' : 'اكتب العدد بالذكاء الاصطناعي'}</button>` : ''}</div>
+    <article class="paper">
+      <header class="mast"><div class="pn">صدى الملاعب</div><div class="pm"><span>العدد ${num(P.n)}</span><span>${fdate(P.date, true)}</span><span>${P.ai ? 'بقلم محرر آلي (Claude)' : 'يومية رياضية'}</span></div></header>
+      <h1 class="ph">${scoreText(P.head)}</h1>
+      <p class="psub">${scoreText(P.sub)}</p>
+      <div class="pcols">${P.items.map((it) => `<section><h3>${scoreText(it.title)}</h3><p>${scoreText(it.body)}</p></section>`).join('')}</div>
+    </article>`;
+  }
+  const aiErr = (e) => ({ not_granted: 'لم يُسمح باستعمال Claude', rate_limited: 'طلبات كثيرة، حاول بعد قليل', invalid_json: 'رد غير مفهوم، أعد المحاولة' }[e && e.code] || 'تعذر الحصول على رد');
+  // نتيجة داخل نص عربي: أهداف الفريق المذكور أولًا تظهر يمينًا
+  const scoreText = (t) => esc(t).replace(/(\d+)-(\d+)/g, (x, g1, g2) => pair(g1, g2, '-'));
+  async function paperAI() {
+    const P = (S.papers || [])[UI.paperIdx || 0];
+    if (!P || !UI.ai.sample) return;
+    UI.paperBusy = true; render();
+    try {
+      const out = await UI.ai.sample.json(`أنت رئيس تحرير صحيفة رياضية جزائرية اسمها «صدى الملاعب». اكتب عددًا جديدًا بلغة صحفية عربية حية مبنيًا فقط على هذه الوقائع من لعبة إدارة كرة قدم، دون اختراع نتائج أو لاعبين:
+${JSON.stringify({ headline: P.head, summary: P.sub, items: P.items, coach: S.manager, club: me().name, board_confidence: S.board.conf, position: FM.position(S, S.userClub) })}
+أعد JSON فقط بالشكل: {"head": "عنوان رئيسي قوي", "sub": "سطر تمهيدي", "items": [{"title": "...", "body": "فقرة من 2-3 جمل"}]} بخمسة مقالات على الأكثر، منها عمود رأي قصير بتوقيع «المحرر».`, { modelTier: 'quick' });
+      if (out && out.head && Array.isArray(out.items)) { Object.assign(P, { head: String(out.head), sub: String(out.sub || ''), items: out.items.slice(0, 6).map((x) => ({ title: String(x.title || ''), body: String(x.body || '') })), ai: true }); save(); }
+    } catch (e) { toast(aiErr(e), true); }
+    UI.paperBusy = false; render();
+  }
+
+  // ---------- مقابلة لاعب ----------
+  function talkModal() {
+    const t = (S.talks || []).find((x) => x.id === UI.modal.id);
+    if (!t) return '';
+    const p = S.players[t.pid];
+    const chat = UI.talk || { turns: [], busy: false };
+    const opts = [['promise', 'أعده بالمشاركة أساسيًا', 'معنويات +22، لكن عليك إشراكه في مباراتين من الثلاث القادمة'], ['fight', 'عليك أن تقاتل على مكانك', 'نتيجة غير مضمونة، اللاعبون الأكبر سنًا يتقبلونها أكثر'], ['sell', 'إن لم يعجبك فارحل', 'معنويات −15 ويُعرض للبيع']];
+    if (t.reason === 'contract') opts.unshift(['renew', 'اعرض عليه تجديد العقد', `ثلاث سنوات بأجر ${money(FM.renewDemand(S, p))} أسبوعيًا`]);
+    return `<div class="overlay" data-a="closeBg"><div class="modal" role="dialog" aria-modal="true" aria-label="مقابلة لاعب">
+      <div class="mh"><div><h2>مقابلة مع ${esc(p.name)}</h2><div class="muted" style="font-size:.84rem">${pos(p.pos)} ${num(p.age)} سنة · تقييم ${num(p.ovr)} · المعنويات ${num(Math.round(p.morale))} · ${esc(FM.TALK_REASON[t.reason])}</div></div><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
+      <div class="mb">
+        <div class="stack">${opts.map(([k, l, d]) => `<button class="rec opt-btn" data-a="talkOpt" data-v="${k}"><div class="t">${esc(l)}</div><span></span><div class="d">${esc(d)}</div></button>`).join('')}</div>
+        ${UI.ai.sample ? `<section class="stack" style="border-top:1px solid var(--line);padding-top:14px"><h3>أو تحدث معه بكلماتك (الذكاء الاصطناعي يؤدي دور اللاعب)</h3>
+          <div class="chat" style="max-height:38vh">${chat.turns.slice(1).map((x) => `<div class="bub ${x.role === 'user' ? 'user' : 'assistant'}">${x.role === 'user' ? esc(x.content) : fmtAI(x.content)}</div>`).join('') || `<div class="muted">${esc(p.name)} ينتظر أن تبدأ الحديث.</div>`}${chat.busy ? '<div class="bub assistant"><p class="muted">…</p></div>' : ''}</div>
+          <form class="row" id="talk-form"><input type="text" id="talk-in" style="flex:1;min-width:0" placeholder="ماذا تقول له؟" ${chat.busy ? 'disabled' : ''} autocomplete="off"><button class="btn" type="submit" ${chat.busy ? 'disabled' : ''}>قل</button>${chat.turns.length > 2 ? `<button class="btn pri" type="button" data-a="talkEnd" ${chat.busy ? 'disabled' : ''}>أنهِ المقابلة</button>` : ''}</form></section>` : ''}
+      </div></div></div>`;
+  }
+  async function talkSay(text) {
+    const t = (S.talks || []).find((x) => x.id === UI.modal.id);
+    if (!t || !UI.ai.sample) return;
+    const p = S.players[t.pid];
+    if (!UI.talk || UI.talk.id !== t.id) UI.talk = { id: t.id, turns: [{ role: 'user', content: `مثّل دور اللاعب ${p.name} (${FM.POS_AR[p.pos]}، ${p.age} سنة، تقييم ${p.ovr}، معنويات ${Math.round(p.morale)} من 100، أهداف الموسم ${p.st.goals}، مباريات ${p.st.apps}) في مقابلة مع مدربه ${S.manager} في نادي ${me().name}. سبب المقابلة: ${FM.TALK_REASON[t.reason]}. رد بالعربية بجمل قصيرة وواقعية كلاعب محترف، بانفعال يناسب معنوياته. لا تخرج عن الدور.` }], busy: false };
+    UI.talk.turns.push({ role: 'user', content: text });
+    UI.talk.busy = true; render();
+    try { const r = await UI.ai.sample(UI.talk.turns, { modelTier: 'quick', cache: false }); UI.talk.turns.push({ role: 'assistant', content: r.text }); }
+    catch (e) { toast(aiErr(e), true); UI.talk.turns.pop(); }
+    UI.talk.busy = false; render();
+  }
+  async function talkEnd() {
+    const t = (S.talks || []).find((x) => x.id === UI.modal.id);
+    if (!t || !UI.talk) return;
+    UI.talk.busy = true; render();
+    try {
+      const transcript = UI.talk.turns.slice(1).map((x) => `${x.role === 'user' ? 'المدرب' : 'اللاعب'}: ${x.content}`).join('\n');
+      const out = await UI.ai.sample.json(`قيّم هذه المقابلة بين مدرب ولاعب غير راضٍ (${FM.TALK_REASON[t.reason]}). أعد JSON فقط: {"morale_delta": عدد صحيح بين -25 و25 لتغير معنويات اللاعب, "promise": true إن وعده المدرب بالمشاركة أساسيًا, "summary": "جملة واحدة بالعربية تلخص النتيجة"}.\n\n${transcript}`, { modelTier: 'quick' });
+      const r = FM.resolveTalk(S, t.id, null, out || {});
+      UI.talk = null; UI.modal = null; save(); toast(r ? `${r.msg} (المعنويات ${r.delta >= 0 ? '+' : ''}${r.delta})` : 'انتهت المقابلة');
+    } catch (e) { UI.talk.busy = false; toast(aiErr(e), true); render(); }
+  }
+
+  // ---------- الندوة الصحفية ----------
+  function pressModal() {
+    const st = UI.press;
+    const ev = st.ev;
+    return `<div class="overlay" data-a="closeBg"><div class="modal" role="dialog" aria-modal="true" aria-label="الندوة الصحفية">
+      <div class="mh"><div><h2>الندوة الصحفية</h2><div class="muted" style="font-size:.84rem">قبل ${esc(ev.label)}. أجوبتك تؤثر في معنويات لاعبيك، ثقة المجلس، وحماس الخصم.</div></div><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
+      <div class="mb">
+        ${UI.ai.sample && !st.ai ? `<button class="btn sm" data-a="pressAI" ${st.busy ? 'disabled' : ''} style="justify-self:start">${st.busy ? 'الصحفيون يحضّرون أسئلتهم…' : 'أسئلة جديدة من صحفيين (الذكاء الاصطناعي)'}</button>` : ''}
+        ${st.qs.map((q, i) => `<section class="stack"><h3>${num(i + 1)}. ${esc(q.q)}</h3><div class="stack" style="gap:6px">${q.options.map((o, j) => `<label class="opt ${st.pick[i] === j ? 'on' : ''}"><input type="radio" name="pq${i}" data-c="pressPick" data-i="${i}" value="${j}" ${st.pick[i] === j ? 'checked' : ''}><span><b>${esc(o.tone)}:</b> ${esc(o.text)}</span></label>`).join('')}
+          ${UI.ai.sample ? `<label class="opt ${st.pick[i] === -1 ? 'on' : ''}"><input type="radio" name="pq${i}" data-c="pressPick" data-i="${i}" value="-1" ${st.pick[i] === -1 ? 'checked' : ''}><span style="flex:1"><b>بكلماتي:</b> <input type="text" id="pf${i}" value="${esc(st.free[i] || '')}" data-c="pressFree" data-i="${i}" placeholder="اكتب جوابك" style="width:100%;margin-top:6px"></span></label>` : ''}</div></section>`).join('')}
+        <div class="row" style="justify-content:flex-end"><button class="btn pri" data-a="pressDone" ${st.qs.every((q, i) => st.pick[i] !== undefined) && !st.busy ? '' : 'disabled'}>${st.busy ? 'يُحلَّل…' : 'أنهِ الندوة'}</button></div>
+      </div></div></div>`;
+  }
+  async function pressAI() {
+    const st = UI.press;
+    st.busy = true; render();
+    try {
+      const ev = st.ev, oppId = ev.f.h === ev.me ? ev.f.a : ev.f.h;
+      const sq = FM.squadOf(S, ev.me);
+      const ctx = { coach: S.manager, team: FM.club(S, ev.me).name, opponent: FM.club(S, oppId).name, match: ev.label, date: ev.date, last_results: S.formLine.slice(-5).map((r) => `${r.gf}-${r.ga}`), position: FM.position(S, S.userClub), board_target: FM.targetText(S), board_confidence: S.board.conf, injured: sq.filter((p) => p.inj).map((p) => p.name), star: sq.sort((a, b) => b.ovr - a.ovr)[0].name, news: (S.news || []).slice(0, 3) };
+      const out = await UI.ai.sample.json(`أنت ثلاثة صحفيين رياضيين في ندوة صحفية قبل مباراة. اكتب 3 أسئلة حادة وواقعية بالعربية مبنية على هذه الوقائع فقط: ${JSON.stringify(ctx)}
+لكل سؤال 3 أجوبة مقترحة للمدرب بنبرات مختلفة. أعد JSON فقط: [{"q": "...", "options": [{"tone": "هادئ أو واثق أو حاد أو ساخر", "text": "...", "morale": -3..5, "board": -3..3, "opp": 0..5}]}] حيث morale أثر الجواب على معنويات لاعبينا، board على ثقة المجلس، opp على حماس الخصم.`, { modelTier: 'quick' });
+      if (Array.isArray(out) && out.length) {
+        st.qs = out.slice(0, 3).map((q) => ({ q: String(q.q || ''), options: (q.options || []).slice(0, 4).map((o) => ({ tone: String(o.tone || ''), text: String(o.text || ''), eff: { morale: clampN(+o.morale || 0, -3, 5), board: clampN(+o.board || 0, -3, 3), opp: clampN(+o.opp || 0, 0, 5) } })) }));
+        st.pick = []; st.free = []; st.ai = true;
+      }
+    } catch (e) { toast(aiErr(e), true); }
+    st.busy = false; render();
+  }
+  async function pressDone() {
+    const st = UI.press;
+    const answers = [];
+    const freeIdx = st.qs.map((q, i) => (st.pick[i] === -1 ? i : -1)).filter((i) => i >= 0);
+    let rated = [];
+    if (freeIdx.length && UI.ai.sample) {
+      st.busy = true; render();
+      try {
+        rated = await UI.ai.sample.json(`قيّم أجوبة مدرب كرة قدم في ندوة صحفية. لكل جواب أعد أثره: morale (-3..5) على معنويات لاعبيه، board (-3..3) على ثقة مجلس الإدارة، opp (0..5) على حماس الخصم. أعد JSON فقط كمصفوفة بنفس الترتيب: [{"morale":0,"board":0,"opp":0}].\n\n${freeIdx.map((i) => `سؤال: ${st.qs[i].q}\nجواب: ${st.free[i] || ''}`).join('\n\n')}`, { modelTier: 'quick' });
+      } catch { rated = []; }
+      st.busy = false;
+    }
+    st.qs.forEach((q, i) => {
+      if (st.pick[i] === -1) { const r = (Array.isArray(rated) && rated[freeIdx.indexOf(i)]) || {}; answers.push({ text: st.free[i] || '', eff: { morale: clampN(+r.morale || 0, -3, 5), board: clampN(+r.board || 0, -3, 3), opp: clampN(+r.opp || 0, 0, 5) } }); }
+      else answers.push(q.options[st.pick[i]]);
+    });
+    const r = FM.applyPress(S, answers, st.ev);
+    save();
+    const ev = st.ev;
+    UI.press = null;
+    UI.modal = { type: 'prematch', ev };
+    toast(`انتهت الندوة: معنويات الفريق ${r.mor >= 0 ? '+' : ''}${r.mor} · ثقة المجلس ${r.brd >= 0 ? '+' : ''}${r.brd}${r.opp ? ` · الخصم متحفز (+${r.opp})` : ''}`);
+  }
+
+  // ---------- عروض التدريب ----------
+  function offersModal() {
+    const offers = S.jobOffers || [];
+    const forced = S.unemployed;
+    return `<div class="overlay" ${forced ? '' : 'data-a="closeBg"'}><div class="modal" role="dialog" aria-modal="true" aria-label="عروض التدريب">
+      <div class="mh"><div><h2>${forced ? 'أنت بلا نادٍ' : 'عروض تدريب'}</h2><div class="muted" style="font-size:.84rem">سمعتك كمدرب ${num(S.mgr ? S.mgr.rep : '—')} · ${forced ? 'اختر ناديك القادم لتكمل مسيرتك' : 'أندية أخرى تريدك، ويمكنك البقاء.'}</div></div>${forced ? '' : '<button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button>'}</div>
+      <div class="mb"><div class="clubs">${offers.map((o) => { const c = FM.club(S, o.club), lg = FM.leagueOf(S, c.league); return `<div class="clubc" style="cursor:default">${crest(c, 38)}<div><div class="nm">${esc(c.name)}</div><div class="muted" style="font-size:.76rem">${esc(lg.name)} · ${esc(c.stadium)}</div></div><div class="d"><span>الميزانية ${$m(c.budget)}</span><span>المستوى ${num(c.level)}</span><span>المركز ${num(FM.position(S, c.id))}</span></div><button class="btn pri sm" data-a="takeJob" data-v="${c.id}" style="grid-column:1/-1">وقّع مع ${esc(c.short)}</button></div>`; }).join('') || '<div class="empty">لا عروض حاليًا.</div>'}</div>
+        ${forced && !offers.length ? '<button class="btn" data-a="newCareer">مسيرة جديدة</button>' : ''}</div></div></div>`;
+  }
+
+  // ---------- تحليل صورة خطة ----------
+  async function aiImage(file) {
+    if (!file || !UI.ai.sample) return;
+    UI.modal = { type: 'img', busy: true, res: null };
+    render();
+    try {
+      const out = await UI.ai.sample.json(`هذه صورة من مباراة كرة قدم أو لوحة تكتيك. حلّلها كمحلل أداء: ما الخطة (اختر الأقرب من ${Object.keys(FM.FORMATIONS).join('، ')})، وما التعليمات الظاهرة؟ أعد JSON فقط:
+{"formation": "...", "mentality": 0-4, "pressing": 0-2, "tempo": 0-2, "width": 0-2, "line": 0-2, "passing": 0-2, "school": إحدى ${JSON.stringify(Object.keys(FM.SCHOOLS))} أو null, "notes": "ثلاث ملاحظات قصيرة بالعربية عما تراه في الصورة"}
+المقاييس: العقلية 0 دفاعي جدًا..4 هجومي جدًا، الضغط/الإيقاع/العرض/الخط 0 منخفض..2 عالٍ، التمرير 0 قصير..2 مباشر. إن لم تكن الصورة لكرة قدم فأعد {"error": "السبب"}.`, { images: [file] });
+      UI.modal = { type: 'img', busy: false, res: out };
+    } catch (e) { UI.modal = { type: 'img', busy: false, err: aiErr(e) }; }
+    render();
+  }
+  function imgModal() {
+    const M = UI.modal, r = M.res;
+    return `<div class="overlay" data-a="closeBg"><div class="modal" role="dialog" aria-modal="true" aria-label="تحليل الصورة">
+      <div class="mh"><h2>تحليل صورة الخطة</h2><button class="btn ghost x" data-a="close" aria-label="إغلاق">✕</button></div>
+      <div class="mb">${M.busy ? '<div class="empty">المحلل ينظر في الصورة…</div>' : M.err ? `<div class="pill bad">${esc(M.err)}</div>` : r && r.error ? `<div class="pill bad" style="white-space:normal">${esc(r.error)}</div>` : r ? `
+        <dl class="kv"><dt>الخطة</dt><dd class="num">${esc(r.formation)}</dd>${r.school && FM.SCHOOLS[r.school] ? `<dt>أقرب مدرسة</dt><dd>${esc(schoolLabel(r.school))}</dd>` : ''}${Object.keys(FM.TACTIC_KEYS).map((k) => (r[k] !== undefined && r[k] !== null ? `<dt>${FM.TACTIC_AR[k]}</dt><dd>${FM.TACTIC_KEYS[k][clampN(Math.round(+r[k]), 0, FM.TACTIC_KEYS[k].length - 1)]}</dd>` : '')).join('')}</dl>
+        ${r.notes ? `<p style="margin:0">${esc(r.notes)}</p>` : ''}
+        <div class="row" style="justify-content:flex-end"><button class="btn pri" data-a="imgApply">طبّق هذه الخطة على فريقي</button></div>` : ''}</div></div></div>`;
+  }
+
+  // ---------- التعليق: فصحى، دارجة جزائرية، أو ذكي ----------
+  const DARIJA = {
+    goal: ['قووووول! {p} يسكنها في الشباك! {t} يسجّل!', 'يا سلااام! {p} ما رحمش الحارس، هدف لـ{t}!', 'قووول! {p} يدير الفرق لـ{t}!'],
+    save: ['{p} يسدد… والحارس واقف كي الحيط!', 'الحارس يطير ويسلّك الموقف قدام {p}!'],
+    miss: ['{p} يضيّعها! كانت هدف مضمون يا خو!', 'آآه… {p} يرميها برّا'],
+    yellow: ['كارطون صفرا لـ{p}', 'الحكم يحذّر {p} بالصفرا'],
+    red: ['كارطون حمرا! {p} يخرج، {t} يكمّل بعشرة', 'طرد! {p} يروح للدوش بكري'],
+    sub: ['تبديل عند {t}: يدخل {p}'],
+    injury: ['{p} طاح وما قدرش يكمّل، ربي يستر'],
+    half: ['استراحة! {s}'],
+    end: ['صفّر الحكم! النتيجة النهائية {s}'],
+  };
+  const pl = (id) => (S && S.players[id]) || null;
+  function commentText(L, e) {
+    if (L.aiComm && e.ai) return e.ai;
+    if (L.dialect !== 'darija' || !DARIJA[e.type]) return e.text;
+    const p = e.pid ? pl(e.pid) : null;
+    const list = DARIJA[e.type];
+    const tpl = list[(e.min + (e.side > 0 ? 1 : 0)) % list.length];
+    return tpl.replace('{p}', p ? shortName(p.name) : '').replace('{t}', e.side >= 0 ? L.m.names[e.side] : '').replace('{s}', `${L.m.names[0]} ${L.m.sides[0].goals}-${L.m.sides[1].goals} ${L.m.names[1]}`);
+  }
+  async function aiComment(L, e) {
+    if (!L.aiComm || !UI.ai.sample || (L.aiCalls || 0) >= 12 || !['goal', 'red', 'half', 'end'].includes(e.type)) return;
+    L.aiCalls = (L.aiCalls || 0) + 1;
+    try {
+      const r = await UI.ai.sample(`أنت معلق رياضي جزائري حماسي على المباشر. اكتب جملة تعليق واحدة فقط (أقل من 25 كلمة) ${L.dialect === 'darija' ? 'بالدارجة الجزائرية' : 'بالعربية الفصحى'} على هذه اللقطة. المباراة: ${L.m.names[0]} ضد ${L.m.names[1]}، النتيجة ${L.m.sides[0].goals}-${L.m.sides[1].goals}، الدقيقة ${e.min}. اللقطة: ${e.text}. لا تخترع أسماء أو أرقامًا.`, { modelTier: 'quick', cache: false });
+      e.ai = r.text.trim();
+      L.shown = -1;
+      updateHud(false);
+    } catch (err) { if (err && (err.code === 'not_granted' || err.code === 'rate_limited' || err.code === 'sampling_disabled')) L.aiComm = false; }
+  }
+
+  // ---------- اللعب مع صديق ----------
+  // المضيف يشغّل المحاكاة وينشر حالة كل دقيقة في «حضوره» داخل غرفة مسماة؛ الضيف يبني العالم نفسه من البذرة نفسها
+  // (نفس اللاعبين والأرقام)، فيعرض اللقطات من الإطارات ويرسل تعليماته وتبديلاته في حضوره.
+  UI.room = { api: undefined };
+  if (window.claude && window.claude.use) window.claude.use('room').then((r) => { UI.room.api = r; if (UI.view === 'friend') render(); });
+  else UI.room.api = null;
+  const allDataClubs = () => window.FM_DATA.LEAGUES.flatMap((l) => l.clubs.map((c) => Object.assign({ lg: l.short }, c)));
+  function friendView() {
+    const F = UI.friend || {};
+    const R = UI.room;
+    if (R.api === undefined) return '<div class="empty">يجري الاتصال…</div>';
+    if (!R.api) return `<section class="panel stack"><h2>مباراة مع صديق</h2><p style="margin:0">اللعب المباشر مع صديق يعمل حين تُفتح اللعبة داخل Claude، بعد مشاركة رابطها معه من قائمة المشاركة. كل واحد يختار ناديه من أي دوري، ويغيّر خطته وتبديلاته من جهازه أثناء المباراة.</p></section>`;
+    const clubs = allDataClubs().sort((a, b) => b.rep - a.rep);
+    const sel = (id, v) => `<select id="${id}" data-c="${id}">${clubs.map((c) => `<option value="${c.k}" ${c.k === v ? 'selected' : ''}>${esc(c.name)} (${esc(c.lg)})</option>`).join('')}</select>`;
+    if (!F.room) return `<div class="row sp"><h2>مباراة مع صديق</h2></div>
+      <div class="grid g2">
+        <section class="panel stack"><h3>أنشئ مباراة</h3><div class="field"><label for="fr-club">ناديك</label>${sel('fr-club', F.club || 'mca')}</div><button class="btn pri" data-a="frHost" style="justify-self:start">أنشئ غرفة وأعطِ الرمز لصديقك</button></section>
+        <section class="panel stack"><h3>انضم إلى صديق</h3><div class="field"><label for="fr-club2">ناديك</label>${sel('fr-club2', F.club2 || 'usma')}</div><div class="field"><label for="fr-code">رمز الغرفة</label><input type="text" id="fr-code" inputmode="numeric" maxlength="4" placeholder="مثال: 4821" style="direction:ltr"></div><button class="btn pri" data-a="frJoin" style="justify-self:start">انضم</button></section>
+      </div><p class="muted" style="font-size:.84rem">يحتاج صديقك إلى رابط اللعبة: شاركها معه من قائمة المشاركة في Claude. المضيف يتحكم في الإيقاف، والطرفان يغيّران الخطة والتبديلات.</p>`;
+    const host = F.role === 'host';
+    const other = F.room.peers().find((p) => !p.sameTab && p.presence && p.presence.role === (host ? 'guest' : 'host'));
+    const oc = other && other.presence.club ? clubs.find((c) => c.k === other.presence.club) : null;
+    const mc = clubs.find((c) => c.k === F.myClub);
+    return `<div class="row sp"><h2>مباراة مع صديق</h2><button class="btn sm ghost" data-a="frLeave">غادر الغرفة</button></div>
+      <section class="panel stack"><div class="row sp"><span>رمز الغرفة: <b class="num" style="font-size:1.4rem">${esc(F.code)}</b></span><span class="pill ${other ? 'good' : ''}">${other ? 'صديقك متصل' : 'في انتظار صديقك…'}</span></div>
+        <div class="fixture"><div class="side"><div class="nm">${esc(mc ? mc.name : '')}</div><div class="muted">${host ? 'أنت (المضيف)' : 'أنت'}</div></div><div class="score muted">ضد</div><div class="side"><div class="nm">${esc(oc ? oc.name : '—')}</div><div class="muted">صديقك</div></div></div>
+        ${host ? `<button class="btn pri" data-a="frStart" ${other && oc ? '' : 'disabled'} style="justify-self:center">ابدأ المباراة</button>` : '<div class="muted" style="text-align:center">المضيف يبدأ المباراة.</div>'}</section>`;
+  }
+  async function frEnter(role, code, myClub) {
+    try {
+      const room = await UI.room.api.join('dakka-' + code);
+      UI.friend = { role, code, room, myClub, seed: role === 'host' ? (Math.random() * 1e9) | 0 : null };
+      await room.presence({ role, club: myClub, seed: UI.friend.seed });
+      room.onPeers(() => onFriendPeers());
+      render();
+    } catch { toast('تعذر دخول الغرفة', true); }
+  }
+  function onFriendPeers() {
+    const F = UI.friend;
+    if (!F) return;
+    const others = F.room.peers().filter((p) => !p.sameTab);
+    if (F.role === 'guest') {
+      const h = others.find((p) => p.presence && p.presence.role === 'host');
+      if (h && h.presence.frame && !UI.match) startFriendGuest(h.presence);
+      else if (h && UI.match && UI.match.remote) friendGuestFrame(h.presence);
+    } else if (UI.match && UI.match.friend) {
+      const g = others.find((p) => p.presence && p.presence.role === 'guest');
+      if (g) friendHostInput(g.presence);
+    }
+    if (UI.view === 'friend' && !UI.match) render();
+  }
+  function frStart() {
+    const F = UI.friend;
+    const other = F.room.peers().find((p) => !p.sameTab && p.presence && p.presence.role === 'guest');
+    if (!other) return;
+    UI.careerS = S;
+    S = FM.newGame('ars', 'friend', F.seed);
+    const h = F.myClub, a = other.presence.club;
+    FM.prepareAI(S, h, a); FM.prepareAI(S, a, h);
+    const m = FM.createMatch(S, h, a, S.tactics[h], S.tactics[a], { userSide: 0, ai: [false, false] });
+    beginLive(m, 0, { label: 'مباراة ودية مع صديق', date: '', f: { h, a }, me: h }, { friend: true, speed: 2 });
+    pushHostFrame();
+  }
+  function pushHostFrame() {
+    const F = UI.friend, L = UI.match;
+    if (!F || !L || !L.friend) return;
+    const m = L.m;
+    const tl = m.tl[m.tl.length - 1] || null;
+    const evs = m.events.slice(-4).map((e) => ({ min: e.min, type: e.type, side: e.side, text: String(e.text).slice(0, 140), pid: e.pid }));
+    const frame = {
+      h: m.sides[0].clubId, a: m.sides[1].clubId, min: m.minute, fin: m.finished, g: [m.sides[0].goals, m.sides[1].goals],
+      st: m.sides.map((s) => [s.poss, s.shots, s.onT, Math.round(s.xg * 100), s.corners, s.fouls, s.yel, s.red, s.subs]),
+      on: m.sides.map((s) => s.on.map((e) => [e.id, e.slot, e.role])), tf: m.sides.map((s) => [s.tactic.formation, s.tactic.line]),
+      tl: tl && { t: tl.t, s: tl.s, x: Math.round(tl.x), y: Math.round(tl.y), shot: tl.shot, ev: tl.ev && { shots: tl.ev.shots.map((x) => ({ side: x.side, id: x.id, kind: x.kind, out: x.out, as: x.as })), foul: !!tl.ev.foul, corner: !!tl.ev.corner } },
+      evs, n: (L.frameN = (L.frameN || 0) + 1),
+    };
+    F.room.presence({ role: 'host', club: F.myClub, seed: F.seed, frame }).catch(() => {});
+  }
+  function friendHostInput(pres) {
+    const L = UI.match;
+    if (!L || !pres.cmd || pres.cmd.n === L.lastCmd) return;
+    L.lastCmd = pres.cmd.n;
+    const sd = L.m.sides[1];
+    if (pres.cmd.tac) { for (const k of Object.keys(FM.TACTIC_KEYS)) if (pres.cmd.tac[k] !== undefined) sd.tactic[k] = clampN(Math.round(+pres.cmd.tac[k]), 0, FM.TACTIC_KEYS[k].length - 1); FM.refresh(S, L.m); }
+    if (pres.cmd.sub) FM.substitute(S, L.m, 1, String(pres.cmd.sub[0]), String(pres.cmd.sub[1]));
+  }
+  function startFriendGuest(hp) {
+    UI.careerS = S;
+    S = FM.newGame('ars', 'friend', hp.seed);
+    const f = hp.frame;
+    const m = FM.createMatch(S, f.h, f.a, S.tactics[f.h], S.tactics[f.a], { userSide: 1, ai: [false, false] });
+    beginLive(m, 1, { label: 'مباراة ودية مع صديق', date: '', f: { h: f.h, a: f.a }, me: f.a }, { remote: true, speed: 2 });
+    friendGuestFrame(hp);
+  }
+  function friendGuestFrame(hp) {
+    const L = UI.match, f = hp.frame;
+    if (!L || !f || f.n === L.lastFrame) return;
+    L.lastFrame = f.n;
+    const m = L.m;
+    f.on.forEach((list, k) => { m.sides[k].on = list.map(([id, slot, role]) => ({ id, slot, role })); m.sides[k].tactic.formation = f.tf[k][0]; m.sides[k].tactic.line = f.tf[k][1]; });
+    f.st.forEach((s, k) => { const sd = m.sides[k]; sd.poss = s[0]; sd.shots = s[1]; sd.onT = s[2]; sd.xg = s[3] / 100; sd.corners = s[4]; sd.fouls = s[5]; sd.yel = s[6]; sd.red = s[7]; sd.subs = s[8]; });
+    m.sides[0].goals = f.g[0]; m.sides[1].goals = f.g[1];
+    for (const e of f.evs) if (!m.events.some((x) => x.min === e.min && x.text === e.text)) m.events.push(e);
+    if (f.tl && f.min > m.minute) { m.minute = f.min; m.tl.push(f.tl); L.queue.push(...plan(L, f.tl)); const c = document.getElementById('lv-clock'); if (c) c.textContent = `${f.min}'`; }
+    m.finished = f.fin;
+    if (m.finished) { updateHud(false); renderMatchControls(); }
+  }
+  function sendGuestCmd(cmd) {
+    const F = UI.friend;
+    F.cmdN = (F.cmdN || 0) + 1;
+    F.room.presence({ role: 'guest', club: F.myClub, cmd: Object.assign({ n: F.cmdN }, cmd) }).catch(() => {});
+  }
+  function leaveFriend() {
+    const F = UI.friend;
+    if (F && F.room) F.room.leave().catch(() => {});
+    UI.friend = null;
+    if (UI.match) { cancelAnimationFrame(UI.match.raf); UI.match = null; }
+    if (UI.careerS !== undefined) { S = UI.careerS; UI.careerS = undefined; }
+    UI.view = S ? 'friend' : 'start';
+    render();
+  }
+
+  Object.assign(A, {
+    ntAccept: () => { FM.acceptNT(S, true); save(); toast('أنت الآن مدرب المنتخب الجزائري أيضًا'); },
+    ntLeave: () => { FM.acceptNT(S, false); save(); render(); },
+    ntAuto: () => { FM.autoPick(S, 'nt-alg', S.tactics['nt-alg']); save(); render(); },
+    ntForm: (d) => { const t = S.tactics['nt-alg']; t.formation = d.v; FM.autoPick(S, 'nt-alg', t); save(); render(); },
+    ntSchool: (d) => { const t = S.tactics['nt-alg']; Object.assign(t, FM.schoolInstr(d.v)); t.school = d.v; t.formation = FM.SCHOOLS[d.v].formation; FM.autoPick(S, 'nt-alg', t); save(); render(); },
+    ntSet: (d) => { S.tactics['nt-alg'][d.k] = +d.v; save(); render(); },
+    paperIdx: (d) => { UI.paperIdx = Math.max(0, +d.v); render(); },
+    paperAI: () => paperAI(),
+    talk: (d) => { UI.modal = { type: 'talk', id: d.id }; UI.talk = null; render(); },
+    talkOpt: (d) => { const r = FM.resolveTalk(S, UI.modal.id, d.v); UI.modal = null; save(); toast(r ? `${r.msg} (المعنويات ${r.delta >= 0 ? '+' : ''}${r.delta})` : ''); },
+    talkEnd: () => talkEnd(),
+    press: () => { const ev = UI.modal.ev; UI.press = { ev, qs: FM.genPress(S, ev), pick: [], free: [], busy: false, ai: false }; UI.modal = { type: 'press', ev }; render(); },
+    pressAI: () => pressAI(),
+    pressDone: () => pressDone(),
+    offers: () => { UI.modal = { type: 'offers' }; render(); },
+    takeJob: (d) => { FM.takeJob(S, d.v); UI.modal = null; UI.view = 'home'; UI.recCache = null; UI.lab = null; save(); toast(`مرحبًا في ${FM.club(S, d.v).name}`); },
+    imgApply: () => { const r = UI.modal.res; try { const t = planFrom(Object.assign({}, r, { school: r.school && FM.SCHOOLS[r.school] ? r.school : null, formation: FM.FORMATIONS[r.formation] ? r.formation : myT().formation })); Object.assign(myT(), t); save(); UI.modal = null; toast('طُبّقت الخطة من الصورة'); } catch (e) { toast(String(e.message || e), true); } },
+    mDialect: (d) => { UI.match.dialect = d.v; UI.match.shown = -1; updateHud(false); renderMatchControls(); },
+    mAiComm: () => { UI.match.aiComm = !UI.match.aiComm; renderMatchControls(); },
+    frHost: () => { const c = (document.getElementById('fr-club') || {}).value || 'mca'; frEnter('host', String(1000 + Math.floor(Math.random() * 9000)), c); },
+    frJoin: () => { const code = ((document.getElementById('fr-code') || {}).value || '').replace(/\D/g, ''); const c = (document.getElementById('fr-club2') || {}).value || 'usma'; if (code.length !== 4) { toast('أدخل رمزًا من 4 أرقام', true); return; } frEnter('guest', code, c); },
+    frStart: () => frStart(),
+    frLeave: () => leaveFriend(),
+  });
+  Object.assign(C, {
+    pressPick: (v, el) => { UI.press.pick[+el.dataset.i] = +v; render(); },
+    pressFree: (v, el) => { UI.press.free[+el.dataset.i] = v; },
+    'fr-club': (v) => { UI.friend = Object.assign(UI.friend || {}, { club: v }); },
+    'fr-club2': (v) => { UI.friend = Object.assign(UI.friend || {}, { club2: v }); },
+  });
+  document.addEventListener('change', (e) => { if (e.target && e.target.id === 'tac-img' && e.target.files && e.target.files[0]) aiImage(e.target.files[0]); });
+  document.addEventListener('submit', (e) => {
+    if (e.target.id !== 'talk-form') return;
+    e.preventDefault();
+    const el = document.getElementById('talk-in');
+    if (el && el.value.trim()) talkSay(el.value.trim());
+  });
 
   // ---------- الإقلاع ----------
   function start(data) {
